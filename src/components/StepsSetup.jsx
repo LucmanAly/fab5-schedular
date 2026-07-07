@@ -55,18 +55,6 @@ export function StepInit({ cfg, onChange }) {
           </div>
           <small>After this many days, a rest day is required</small>
         </div>
-
-        <div className="field">
-          <span>Shift changeover</span>
-          <div className="seg">
-            {SPLIT_OPTIONS.map((t) => (
-              <button key={t} type="button" className={cfg.splitTime === t ? 'active' : ''} onClick={() => set({ splitTime: t })}>
-                {fmtTime(t)}
-              </button>
-            ))}
-          </div>
-          <small>Where a split day divides: morning ends and evening begins here</small>
-        </div>
       </div>
     </div>
   );

@@ -1,10 +1,11 @@
 import { useEffect, useMemo, useState } from 'react';
 import { generateSchedule, dayLabels, formatWeek, nextMonday, EMPTY_WEEK, worksOn } from './lib/scheduler';
+import { compareWeeks } from './lib/scheduleDiff';
 import * as cloud from './lib/supabase';
 import { StepInit, StepConfigure } from './components/StepsSetup';
 import CheckGrid from './components/CheckGrid';
 import ScheduleView from './components/ScheduleView';
-import { HistoryPanel, DiagnosticsPanel, PrintOverlay } from './components/Overlays';
+import { HistoryPanel, DiagnosticsPanel, FinalizePanel, PrintOverlay } from './components/Overlays';
 
 const STEPS = ['Set up', 'Names', 'Last week', 'Leave', 'Schedule'];
 
@@ -31,12 +32,16 @@ export default function App() {
   const [lastWeekSource, setLastWeekSource] = useState(null);
   const [leaves, setLeaves] = useState({});
   const [schedule, setSchedule] = useState(null);
+  const [archivedSchedule, setArchivedSchedule] = useState(null); // previous week's schedule for comparison
+  const [predictability, setPredictability] = useState(null); // predictability score
+  const [scheduleStatus, setScheduleStatus] = useState('draft'); // draft | finalized
   const [cloudStatus, setCloudStatus] = useState(cloud.enabled ? 'idle' : 'off');
   const [weeksList, setWeeksList] = useState([]);
-  const [overlay, setOverlay] = useState(null); // 'history' | 'diag'
+  const [overlay, setOverlay] = useState(null); // 'history' | 'diag' | 'finalize'
   const [viewing, setViewing] = useState(null); // archived read-only week
   const [printMode, setPrintMode] = useState(null);
   const [loading, setLoading] = useState(cloud.enabled);
+  const [finalizingWeek, setFinalizingWeek] = useState(false);
 
   const labels = useMemo(() => dayLabels(cfg.weekStart), [cfg.weekStart]);
 
@@ -104,6 +109,8 @@ export default function App() {
       });
       setLastWeek(worked);
       setLastWeekSource(prior.week_start);
+      // Store full schedule for predictability comparison
+      setArchivedSchedule(data.schedule);
     } catch (e) {
       console.error(e);
     }
@@ -126,6 +133,9 @@ export default function App() {
     } else if (step === 3) {
       const fresh = generateSchedule({ stores, workers, leaves, lastWeekWorked: lastWeek, maxConsec: cfg.maxConsec });
       setSchedule(fresh);
+      setScheduleStatus('draft');
+      const pred = compareWeeks(archivedSchedule || {}, fresh, workers);
+      setPredictability(pred);
       persistWeek({ schedule: fresh });
       setStep(4);
     }
@@ -134,15 +144,19 @@ export default function App() {
   function regenerate() {
     const fresh = generateSchedule({ stores, workers, leaves, lastWeekWorked: lastWeek, maxConsec: cfg.maxConsec });
     setSchedule(fresh);
+    setScheduleStatus('draft');
+    const pred = compareWeeks(archivedSchedule || {}, fresh, workers);
+    setPredictability(pred);
     persistWeek({ schedule: fresh });
   }
 
   function editSchedule(nextSchedule) {
     setSchedule(nextSchedule);
+    setScheduleStatus('draft'); // editing reverts to draft
     if (!cloud.enabled) return;
     setCloudStatus('saving');
     cloud
-      .saveWeek(cfg.weekStart, { status: 'scheduled', lastWeek, leaves, schedule: nextSchedule })
+      .saveWeek(cfg.weekStart, { status: 'draft', lastWeek, leaves, schedule: nextSchedule })
       .then(() => setCloudStatus('saved'))
       .catch((e) => {
         console.error(e);
@@ -162,6 +176,21 @@ export default function App() {
     } catch (e) {
       console.error(e);
       setCloudStatus('error');
+    }
+  }
+
+  async function finalizeSchedule() {
+    setFinalizingWeek(true);
+    try {
+      await cloud.saveWeek(cfg.weekStart, { status: 'finalized', lastWeek, leaves, schedule });
+      setScheduleStatus('finalized');
+      setWeeksList(await cloud.listWeeks());
+      setOverlay(null);
+    } catch (e) {
+      console.error(e);
+      setCloudStatus('error');
+    } finally {
+      setFinalizingWeek(false);
     }
   }
 
@@ -287,6 +316,8 @@ export default function App() {
                     labels={labels}
                     readOnly={false}
                     onChange={editSchedule}
+                    predictability={predictability}
+                    status={scheduleStatus}
                   />
                 )}
 
@@ -312,6 +343,13 @@ export default function App() {
                       <button type="button" className="btn" onClick={() => setPrintMode('store')}>
                         Print by store
                       </button>
+                      <button
+                        type="button"
+                        className="btn btn-primary"
+                        onClick={() => setOverlay('finalize')}
+                      >
+                        ✓ Finalize Schedule
+                      </button>
                     </>
                   )}
                 </div>
@@ -330,6 +368,15 @@ export default function App() {
             lastError={cloud.getLastError()}
             onTest={cloud.testConnection}
             onClose={() => setOverlay(null)}
+          />
+        )}
+        {overlay === 'finalize' && (
+          <FinalizePanel
+            weekStart={cfg.weekStart}
+            predictability={predictability}
+            saving={finalizingWeek}
+            onFinalize={finalizeSchedule}
+            onCancel={() => setOverlay(null)}
           />
         )}
       </div>

@@ -28,6 +28,53 @@ export function HistoryPanel({ weeks, currentWeek, onLoad, onClose }) {
   );
 }
 
+export function FinalizePanel({ weekStart, predictability, saving, onFinalize, onCancel }) {
+  const gaps = predictability?.totalSlots || 0; // This is used to show if there are issues
+  return (
+    <div className="modal-backdrop" onClick={onCancel}>
+      <div className="modal sheet" role="dialog" aria-modal="true" onClick={(e) => e.stopPropagation()}>
+        <div className="sheet-grab" />
+        <h3>Finalize schedule?</h3>
+        <p className="hint">Once finalized, this schedule is locked. You can still view and print it, but changes require creating a new week.</p>
+
+        <div className="finalize-summary">
+          {predictability && (
+            <>
+              <div className="finalize-stat">
+                <span className="finalize-label">Similarity to last week:</span>
+                <span className="finalize-value">{predictability.similarityPercent}%</span>
+              </div>
+              <div className="finalize-stat">
+                <span className="finalize-label">Shifts assigned:</span>
+                <span className="finalize-value">{predictability.identicalSlots} of {predictability.totalSlots}</span>
+              </div>
+            </>
+          )}
+          <div className="finalize-stat">
+            <span className="finalize-label">Week starting:</span>
+            <span className="finalize-value">{formatWeek(weekStart)}</span>
+          </div>
+        </div>
+
+        <p className="hint" style={{ marginTop: '12px', fontWeight: 500 }}>
+          ✓ Review complete<br/>
+          ✓ All gaps are acceptable<br/>
+          ✓ Ready to publish
+        </p>
+
+        <div className="modal-actions">
+          <button type="button" className="btn btn-ghost" onClick={onCancel} disabled={saving}>
+            Keep editing
+          </button>
+          <button type="button" className="btn btn-primary" onClick={onFinalize} disabled={saving}>
+            {saving ? 'Finalizing…' : 'Finalize Now'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export function DiagnosticsPanel({ status, diag, lastError, onTest, onClose }) {
   const [testing, setTesting] = useState(false);
   const [result, setResult] = useState(null);

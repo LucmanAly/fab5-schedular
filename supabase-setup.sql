@@ -28,8 +28,10 @@ create table if not exists weeks (
   week_start date primary key,
   status text not null default 'draft',
   last_week jsonb,
-  created_at timestamptz not null default now()
+  created_at timestamptz not null default now(),
+  finalized_at timestamptz
 );
+alter table weeks add column if not exists finalized_at timestamptz;
 
 create table if not exists leaves (
   week_start date not null,

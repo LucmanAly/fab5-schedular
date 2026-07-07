@@ -94,10 +94,14 @@ export async function listWeeks() {
 }
 
 export async function saveWeek(weekStart, { status = 'draft', lastWeek = {}, leaves = {}, schedule = {} }) {
+  const body = { week_start: weekStart, status, last_week: lastWeek };
+  if (status === 'finalized') {
+    body.finalized_at = new Date().toISOString();
+  }
   await sb('weeks', {
     method: 'POST',
     prefer: 'resolution=merge-duplicates,return=minimal',
-    body: { week_start: weekStart, status, last_week: lastWeek },
+    body,
   });
 
   const leaveRows = [];

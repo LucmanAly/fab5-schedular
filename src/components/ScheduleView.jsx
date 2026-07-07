@@ -11,11 +11,12 @@ import {
   EMPTY_WEEK,
 } from '../lib/scheduler';
 
-export default function ScheduleView({ stores, workers, schedule, leaves, lastWeek, maxConsec, splitTime, labels, readOnly, onChange }) {
+export default function ScheduleView({ stores, workers, schedule, leaves, lastWeek, maxConsec, splitTime, labels, readOnly, onChange, predictability, status }) {
   const [group, setGroup] = useState('store'); // store | worker
   const [mode, setMode] = useState('day'); // day | week  (day is the mobile-first default)
   const [activeDay, setActiveDay] = useState(0);
   const [target, setTarget] = useState(null); // { storeId, dayIdx }
+  const [splitTarget, setSplitTarget] = useState(null); // { storeId, dayIdx } for split shift editor
 
   const gaps = computeGaps(schedule, stores, workers); // always live
   const storeName = (id) => (stores.find((s) => s.id === id) || {}).name || `Store ${id}`;
@@ -90,9 +91,21 @@ export default function ScheduleView({ stores, workers, schedule, leaves, lastWe
     if (full) {
       const kind = am.type === 'main' && am.store_id === storeId ? 'main' : 'float';
       return (
-        <button type="button" className={`cell cell-${kind}`} disabled={readOnly} onClick={() => setTarget({ storeId, dayIdx })}>
-          {am.name}
-        </button>
+        <div className="store-day-cell">
+          <button type="button" className={`cell cell-${kind}`} disabled={readOnly} onClick={() => setTarget({ storeId, dayIdx })}>
+            {am.name}
+          </button>
+          {!readOnly && (
+            <button
+              type="button"
+              className="split-btn"
+              title="Split this shift into AM/PM"
+              onClick={() => setSplitTarget({ storeId, dayIdx })}
+            >
+              ✂️
+            </button>
+          )}
+        </div>
       );
     }
     return (
@@ -140,6 +153,37 @@ export default function ScheduleView({ stores, workers, schedule, leaves, lastWe
       <div className={`banner ${gaps.length ? 'banner-bad' : 'banner-good'}`} role="status">
         {bannerText}
       </div>
+
+      {predictability && (
+        <div className="predictability-card">
+          <div className="pred-header">
+            <span className="pred-score">{predictability.similarityPercent}%</span>
+            <span className="pred-label">Similar to last week</span>
+            {status === 'draft' && <span className="pred-badge pred-draft">Draft</span>}
+            {status === 'finalized' && <span className="pred-badge pred-finalized">Finalized</span>}
+          </div>
+          {predictability.totalSlots > 0 && (
+            <div className="pred-details">
+              <p className="pred-stat">{predictability.identicalSlots} of {predictability.totalSlots} shifts unchanged</p>
+              {Object.keys(predictability.workerChanges).length > 0 && (
+                <details className="pred-expand">
+                  <summary>Worker changes</summary>
+                  <ul className="pred-worker-list">
+                    {Object.entries(predictability.workerChanges).map(([wId, info]) => (
+                      <li key={wId}>
+                        <span>{info.name}</span>
+                        <span className="pred-change-count">
+                          {info.sameShifts.length} same, {info.changes.length} changed
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                </details>
+              )}
+            </div>
+          )}
+        </div>
+      )}
 
       <div className="sched-controls">
         <div className="view-toggle" role="tablist" aria-label="Group by">
@@ -286,6 +330,107 @@ export default function ScheduleView({ stores, workers, schedule, leaves, lastWe
           onClose={() => setTarget(null)}
         />
       )}
+
+      {splitTarget && !readOnly && (
+        <SplitShiftSheet
+          store={stores.find((s) => s.id === splitTarget.storeId)}
+          dayIdx={splitTarget.dayIdx}
+          dayLabel={labels[splitTarget.dayIdx]}
+          splitTime={splitTime}
+          storeName={storeName}
+          workers={workers}
+          schedule={schedule}
+          onAssignHalf={assignHalf}
+          onClose={() => setSplitTarget(null)}
+        />
+      )}
+    </div>
+  );
+}
+
+function SplitShiftSheet({ store, dayIdx, dayLabel, splitTime, storeName, workers, schedule, onAssignHalf, onClose }) {
+  const am = workerAtHalf(schedule, workers, store.id, dayIdx, 'am');
+  const pm = workerAtHalf(schedule, workers, store.id, dayIdx, 'pm');
+  const currentWorker = am && am.id === pm?.id ? am : null;
+
+  return (
+    <div className="modal-backdrop" onClick={onClose}>
+      <div className="modal sheet" role="dialog" aria-modal="true" onClick={(e) => e.stopPropagation()}>
+        <div className="sheet-grab" />
+        <h3>Split shift — {store.name} · {dayLabel}</h3>
+        <p className="hint">
+          Split this full-day shift between two workers. Morning {halfLabel(dayIdx, 'am', splitTime)}, Evening {halfLabel(dayIdx, 'pm', splitTime)}.
+        </p>
+
+        <div className="split-setup">
+          <div className="split-half">
+            <div className="split-half-label">Morning</div>
+            <div className="split-half-time">{halfLabel(dayIdx, 'am', splitTime)}</div>
+            <div className="split-current">
+              {am ? (
+                <>
+                  <span className="split-current-who">{am.name}</span>
+                  <span className="split-current-type">{am.type}</span>
+                </>
+              ) : (
+                <span className="split-current-none">OPEN</span>
+              )}
+            </div>
+          </div>
+          <div className="split-arrow">→</div>
+          <div className="split-half">
+            <div className="split-half-label">Evening</div>
+            <div className="split-half-time">{halfLabel(dayIdx, 'pm', splitTime)}</div>
+            <div className="split-current">
+              {pm ? (
+                <>
+                  <span className="split-current-who">{pm.name}</span>
+                  <span className="split-current-type">{pm.type}</span>
+                </>
+              ) : (
+                <span className="split-current-none">OPEN</span>
+              )}
+            </div>
+          </div>
+        </div>
+
+        <p className="hint" style={{ marginTop: '12px' }}>Choose a worker for each half, or keep it as-is:</p>
+
+        <ul className="picker">
+          {workers.map((w) => (
+            <li key={w.id}>
+              <div className="pick pick-ok">
+                <span className="pick-name">
+                  {w.name}
+                  <span className={`chip chip-${w.type}`}>{w.type}</span>
+                </span>
+                <span className="pick-btns">
+                  <button
+                    type="button"
+                    className={`mini ${am && am.id === w.id ? 'active' : ''}`}
+                    onClick={() => onAssignHalf(w.id, store.id, dayIdx, 'am')}
+                  >
+                    AM
+                  </button>
+                  <button
+                    type="button"
+                    className={`mini ${pm && pm.id === w.id ? 'active' : ''}`}
+                    onClick={() => onAssignHalf(w.id, store.id, dayIdx, 'pm')}
+                  >
+                    PM
+                  </button>
+                </span>
+              </div>
+            </li>
+          ))}
+        </ul>
+
+        <div className="modal-actions">
+          <button type="button" className="btn btn-ghost" onClick={onClose}>
+            Done
+          </button>
+        </div>
+      </div>
     </div>
   );
 }
