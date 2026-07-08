@@ -76,7 +76,6 @@ export async function saveSetup(config, stores, workers) {
     body: {
       id: 1,
       num_stores: config.numStores,
-      num_floats: config.numFloats,
       max_consecutive: config.maxConsec,
       split_time: config.splitTime,
     },

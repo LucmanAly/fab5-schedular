@@ -70,7 +70,7 @@ export default function ScheduleView({ stores, workers, schedule, leaves, lastWe
   // ----- render helpers -----
   function HalfSlot({ storeId, dayIdx, half }) {
     const w = workerAtHalf(schedule, workers, storeId, dayIdx, half);
-    const kind = !w ? 'gap' : w.type === 'main' && w.store_id === storeId ? 'main' : 'float';
+    const kind = !w ? 'gap' : w.type === 'main' && w.store_ids && w.store_ids[0] === storeId ? 'main' : 'float';
     return (
       <button
         type="button"
@@ -89,7 +89,7 @@ export default function ScheduleView({ stores, workers, schedule, leaves, lastWe
     const pm = workerAtHalf(schedule, workers, storeId, dayIdx, 'pm');
     const full = am && pm && am.id === pm.id;
     if (full) {
-      const kind = am.type === 'main' && am.store_id === storeId ? 'main' : 'float';
+      const kind = am.type === 'main' && am.store_ids && am.store_ids[0] === storeId ? 'main' : 'float';
       return (
         <div className="store-day-cell">
           <button type="button" className={`cell cell-${kind}`} disabled={readOnly} onClick={() => setTarget({ storeId, dayIdx })}>

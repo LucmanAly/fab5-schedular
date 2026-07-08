@@ -14,11 +14,14 @@ function check(name, cond) {
   if (!cond) failed++;
 }
 
+// Mains link only their own store (top preference); floats link every store, in store order,
+// mirroring the old "covers any store" behavior for these fairness/coverage tests.
 function setup(numStores, numFloats) {
   const stores = Array.from({ length: numStores }, (_, i) => ({ id: i + 1, name: `Store ${i + 1}` }));
+  const allStoreIds = stores.map((s) => s.id);
   const workers = [
-    ...stores.map((s) => ({ id: 100 + s.id, name: `Main ${s.id}`, type: 'main', store_id: s.id })),
-    ...Array.from({ length: numFloats }, (_, i) => ({ id: 200 + i + 1, name: `Float ${i + 1}`, type: 'float', store_id: null })),
+    ...stores.map((s) => ({ id: 100 + s.id, name: `Main ${s.id}`, type: 'main', store_ids: [s.id] })),
+    ...Array.from({ length: numFloats }, (_, i) => ({ id: 200 + i + 1, name: `Float ${i + 1}`, type: 'float', store_ids: allStoreIds })),
   ];
   return { stores, workers };
 }
@@ -115,6 +118,38 @@ function setup(numStores, numFloats) {
   sched[202][0] = { am: null, pm: 1 }; // Float 2 covers store 1 evening
   const day0Gaps = computeGaps(sched, [stores[0]], workers).filter((g) => g.dayIdx === 0);
   check('split AM/PM by two workers leaves no gap', day0Gaps.length === 0);
+}
+
+// 9. A worker not linked to any store is never scheduled, even when a store is uncovered.
+{
+  const stores = [{ id: 1, name: 'Store 1' }];
+  const workers = [{ id: 1, name: 'Unlinked', type: 'float', store_ids: [] }];
+  const sched = generateSchedule({ stores, workers, leaves: {}, lastWeekWorked: {}, maxConsec: 4 });
+  check('unlinked worker never gets a shift', !worksOn(sched[1], 0));
+}
+
+// 10. Store-link order is a preference ranking: when two floats both link a store, the
+// one who ranks it first (lower index in store_ids) is preferred over pure fairness.
+{
+  const stores = [{ id: 1, name: 'Store 1' }, { id: 2, name: 'Store 2' }];
+  const workers = [
+    { id: 1, name: 'Float A', type: 'float', store_ids: [1, 2] }, // prefers store 1
+    { id: 2, name: 'Float B', type: 'float', store_ids: [2, 1] }, // prefers store 2
+  ];
+  const sched = generateSchedule({ stores, workers, leaves: {}, lastWeekWorked: {}, maxConsec: 4 });
+  check('store link order picks the higher-preference worker for store 1', sched[1][0].am === 1);
+  check('store link order picks the higher-preference worker for store 2', sched[2][0].am === 2);
+}
+
+// 11. A main is fixed to their top-preference store even when a float also lists it.
+{
+  const stores = [{ id: 1, name: 'Store 1' }];
+  const workers = [
+    { id: 1, name: 'Main 1', type: 'main', store_ids: [1] },
+    { id: 2, name: 'Float 1', type: 'float', store_ids: [1] },
+  ];
+  const sched = generateSchedule({ stores, workers, leaves: {}, lastWeekWorked: {}, maxConsec: 4 });
+  check('main stays fixed to their linked store over a competing float', sched[1][0].am === 1 && !worksOn(sched[2], 0));
 }
 
 console.log(failed ? `\n${failed} test(s) failed` : '\nAll tests passed');

@@ -173,6 +173,39 @@ input { font-size: 16px; } /* stops iOS zoom-on-focus */
 .pair-row input { font: inherit; padding: 10px; border: 1px solid var(--line); border-radius: 6px; flex: 1; min-width: 0; min-height: var(--tap); }
 .pair-arrow { color: var(--muted); flex: 0 0 auto; }
 
+.store-name-list { margin-bottom: 18px; }
+.worker-add-row { display: flex; gap: 8px; margin-bottom: 14px; flex-wrap: wrap; }
+.worker-list { display: flex; flex-direction: column; gap: 10px; }
+.worker-row { border: 1px solid var(--line); border-radius: 8px; padding: 10px; }
+.worker-row-top { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
+.worker-row-top input { font: inherit; padding: 10px; border: 1px solid var(--line); border-radius: 6px; flex: 1; min-width: 0; min-height: var(--tap); }
+.worker-row-top select { font: inherit; padding: 8px; border: 1px solid var(--line); border-radius: 6px; min-height: var(--tap); }
+.worker-row-links { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.worker-row-links select { font: inherit; padding: 6px 8px; border: 1px dashed var(--line); border-radius: 999px; background: transparent; }
+.store-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 13px;
+  font-weight: 600;
+  padding: 4px 6px 4px 10px;
+  border-radius: 999px;
+  background: var(--float-tint);
+  color: var(--float);
+}
+.store-chip.primary { background: var(--main-tint); color: var(--main); }
+.store-chip button {
+  border: none;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+  padding: 0 2px;
+  line-height: 1;
+  opacity: 0.7;
+}
+.store-chip button:hover { opacity: 1; }
+
 /* ---------- tables (used in week view + check grids) ---------- */
 .grid-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; margin: 0 -4px; padding: 0 4px; }
 .grid { border-collapse: collapse; width: 100%; min-width: 640px; }

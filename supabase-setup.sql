@@ -17,11 +17,15 @@ create table if not exists stores (
   name text not null
 );
 
-create table if not exists workers (
+-- Worker-store linkage is manual and ordered: store_ids[0] is the worker's top
+-- preference (a main's effective home store); further entries are backup stores.
+-- Recreated to move off the old single store_id column.
+drop table if exists workers;
+create table workers (
   id int primary key,
   name text not null,
   type text not null check (type in ('main', 'float')),
-  store_id int
+  store_ids int[] not null default '{}'
 );
 
 create table if not exists weeks (

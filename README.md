@@ -11,9 +11,11 @@ A hosted, mobile-first web app for scheduling main and floating workers across y
 
 ## Everyday features
 
-- 5-step wizard: Set up → Names → Last week → Leave → Schedule
+- 4-step wizard: Set up → Names → Leave → Schedule
+- Manual worker-store linkage — stores come first, then you add each worker and link them to the store(s) they can work. The first store you link is their top preference (a main's is effectively their home store; a float can rank several, and you can add more links any time)
+- "Last week" is no longer a wizard step — it's auto-filled from the previous archived week. It only surfaces as a panel (via the "Last week" button, top right) the first time there's no archive to draw from, or if you need to manually correct a saved week
 - Auto-generation respecting leave and the max-consecutive-days rest rule (2/3/4), including streaks carried over from last week
-- Fair float rotation (fewest days worked go first)
+- Fair float rotation among a store's linked workers (fewest days worked go first, then store preference order)
 - Store view and worker view, color-coded, with a live coverage banner (per half)
 - Tap any slot to reassign — assign AM, PM, or the whole day; warnings inform but never block; two assigned workers swap cleanly
 - Live gap detection — clearing a slot instantly shows OPEN
@@ -65,7 +67,7 @@ Without a `.env`, the app runs in local-only mode (nothing persists).
 npm test
 ```
 
-Nine logic tests: rest-rule enforcement, week-boundary streaks, leave handling, no double-staffing per half, per-half gap alerts, float fairness, live gaps after edits, and split-shift coverage.
+Logic tests cover: rest-rule enforcement, week-boundary streaks, leave handling, no double-staffing per half, per-half gap alerts, float fairness, live gaps after edits, split-shift coverage, unlinked workers never being scheduled, and store-link preference ordering.
 
 ## Notes
 

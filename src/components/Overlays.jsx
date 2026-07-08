@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { DAY_NAMES, workerAtHalf, formatWeek } from '../lib/scheduler';
+import CheckGrid from './CheckGrid';
 
 export function HistoryPanel({ weeks, currentWeek, onLoad, onClose }) {
   return (
@@ -21,6 +22,31 @@ export function HistoryPanel({ weeks, currentWeek, onLoad, onClose }) {
         <div className="modal-actions">
           <button type="button" className="btn btn-ghost" onClick={onClose}>
             Close
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+export function LastWeekPanel({ workers, labels, lastWeek, source, onChange, onSave, onClose }) {
+  return (
+    <div className="modal-backdrop" onClick={onClose}>
+      <div className="modal sheet" role="dialog" aria-modal="true" onClick={(e) => e.stopPropagation()}>
+        <div className="sheet-grab" />
+        <h3>Last week's worked days</h3>
+        <p className="hint">
+          {source
+            ? `Loaded automatically from the archived week of ${formatWeek(source)}. Only adjust this if that record looks wrong.`
+            : "No archived week found yet, so there's nothing to load automatically — tick the days each person worked so rest days carry across the week boundary."}
+        </p>
+        <CheckGrid workers={workers} labels={labels} value={lastWeek} onChange={onChange} tone="worked" />
+        <div className="modal-actions">
+          <button type="button" className="btn btn-ghost" onClick={onClose}>
+            Cancel
+          </button>
+          <button type="button" className="btn btn-primary" onClick={onSave}>
+            Save
           </button>
         </div>
       </div>
@@ -187,7 +213,10 @@ export function PrintOverlay({ mode, weekStart, stores, workers, schedule, leave
             {workers.map((w) => (
               <section key={w.id} className="print-block">
                 <h2>
-                  {w.name} <em>({w.type === 'main' ? `main — ${storeName(w.store_id)}` : 'floating'})</em>
+                  {w.name}{' '}
+                  <em>
+                    ({w.type === 'main' ? 'main' : 'float'} — {(w.store_ids || []).map(storeName).join(', ') || 'unlinked'})
+                  </em>
                 </h2>
                 <table>
                   <thead>

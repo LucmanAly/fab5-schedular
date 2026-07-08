@@ -5,27 +5,25 @@ import * as cloud from './lib/supabase';
 import { StepInit, StepConfigure } from './components/StepsSetup';
 import CheckGrid from './components/CheckGrid';
 import ScheduleView from './components/ScheduleView';
-import { HistoryPanel, DiagnosticsPanel, FinalizePanel, PrintOverlay } from './components/Overlays';
+import { HistoryPanel, DiagnosticsPanel, FinalizePanel, PrintOverlay, LastWeekPanel } from './components/Overlays';
 
-const STEPS = ['Set up', 'Names', 'Last week', 'Leave', 'Schedule'];
+const STEPS = ['Set up', 'Names', 'Leave', 'Schedule'];
 
-function resizeSetup(numStores, numFloats, prevStores, prevWorkers) {
+// Stores are resized here, but workers are never auto-created or auto-linked — that's
+// done by hand in StepConfigure, since worker-store linkage is manual.
+function resizeSetup(numStores, prevStores, prevWorkers) {
   const stores = Array.from({ length: numStores }, (_, i) => {
     const id = i + 1;
     return prevStores.find((s) => s.id === id) || { id, name: `Store ${id}` };
   });
-  const mains = stores.map((s) => {
-    const prev = prevWorkers.find((w) => w.type === 'main' && w.store_id === s.id);
-    return prev || { id: 100 + s.id, name: `Main ${s.id}`, type: 'main', store_id: s.id };
-  });
-  const prevFloats = prevWorkers.filter((w) => w.type === 'float');
-  const floats = Array.from({ length: numFloats }, (_, i) => prevFloats[i] || { id: 200 + i + 1, name: `Float ${i + 1}`, type: 'float', store_id: null });
-  return { stores, workers: [...mains, ...floats] };
+  const validIds = new Set(stores.map((s) => s.id));
+  const workers = prevWorkers.map((w) => ({ ...w, store_ids: (w.store_ids || []).filter((id) => validIds.has(id)) }));
+  return { stores, workers };
 }
 
 export default function App() {
   const [step, setStep] = useState(0);
-  const [cfg, setCfg] = useState({ numStores: 8, numFloats: 6, maxConsec: 3, splitTime: '14:00', weekStart: nextMonday() });
+  const [cfg, setCfg] = useState({ numStores: 8, maxConsec: 3, splitTime: '14:00', weekStart: nextMonday() });
   const [stores, setStores] = useState([]);
   const [workers, setWorkers] = useState([]);
   const [lastWeek, setLastWeek] = useState({});
@@ -54,7 +52,6 @@ export default function App() {
           setCfg((c) => ({
             ...c,
             numStores: config.num_stores,
-            numFloats: config.num_floats,
             maxConsec: config.max_consecutive,
             splitTime: config.split_time || '14:00',
           }));
@@ -97,12 +94,12 @@ export default function App() {
     });
 
   async function prefillLastWeek() {
-    if (!cloud.enabled) return;
+    if (!cloud.enabled) return false;
     const prior = weeksList.find((w) => w.week_start < cfg.weekStart);
-    if (!prior) return;
+    if (!prior) return false;
     try {
       const data = await cloud.loadWeek(prior.week_start);
-      if (!data) return;
+      if (!data) return false;
       const worked = {};
       workers.forEach((w) => {
         worked[w.id] = (data.schedule[w.id] || EMPTY_WEEK()).map((_, d) => worksOn(data.schedule[w.id], d));
@@ -111,33 +108,38 @@ export default function App() {
       setLastWeekSource(prior.week_start);
       // Store full schedule for predictability comparison
       setArchivedSchedule(data.schedule);
+      return true;
     } catch (e) {
       console.error(e);
+      return false;
     }
+  }
+
+  function saveLastWeek() {
+    setOverlay(null);
+    persistWeek();
   }
 
   async function next() {
     if (step === 0) {
-      const sized = resizeSetup(cfg.numStores, cfg.numFloats, stores, workers);
+      const sized = resizeSetup(cfg.numStores, stores, workers);
       setStores(sized.stores);
       setWorkers(sized.workers);
       withSave(() => cloud.saveSetup(cfg, sized.stores, sized.workers));
       setStep(1);
     } else if (step === 1) {
       withSave(() => cloud.saveSetup(cfg, stores, workers));
-      await prefillLastWeek();
+      const found = await prefillLastWeek();
+      if (!found) setOverlay('lastweek'); // no archived week to draw from — ask once, manually
       setStep(2);
     } else if (step === 2) {
-      persistWeek();
-      setStep(3);
-    } else if (step === 3) {
       const fresh = generateSchedule({ stores, workers, leaves, lastWeekWorked: lastWeek, maxConsec: cfg.maxConsec });
       setSchedule(fresh);
       setScheduleStatus('draft');
       const pred = compareWeeks(archivedSchedule || {}, fresh, workers);
       setPredictability(pred);
       persistWeek({ schedule: fresh });
-      setStep(4);
+      setStep(3);
     }
   }
 
@@ -227,6 +229,11 @@ export default function App() {
                 History
               </button>
             )}
+            {workers.length > 0 && (
+              <button type="button" className="btn btn-ghost btn-light" onClick={() => setOverlay('lastweek')}>
+                Last week
+              </button>
+            )}
           </div>
         </header>
 
@@ -288,23 +295,12 @@ export default function App() {
                 {step === 1 && <StepConfigure stores={stores} workers={workers} onStores={setStores} onWorkers={setWorkers} />}
                 {step === 2 && (
                   <div className="panel">
-                    <h2>Who worked last week?</h2>
-                    <p className="hint">
-                      {lastWeekSource
-                        ? `Loaded from the archived week of ${formatWeek(lastWeekSource)}. Adjust if needed.`
-                        : 'Tick the days each person worked, so rest days carry across the week boundary.'}
-                    </p>
-                    <CheckGrid workers={workers} labels={labels} value={lastWeek} onChange={setLastWeek} tone="worked" />
-                  </div>
-                )}
-                {step === 3 && (
-                  <div className="panel">
                     <h2>Leave requests</h2>
                     <p className="hint">Tick each person's days off. The generator plans around them.</p>
                     <CheckGrid workers={workers} labels={labels} value={leaves} onChange={setLeaves} tone="leave" />
                   </div>
                 )}
-                {step === 4 && schedule && (
+                {step === 3 && schedule && (
                   <ScheduleView
                     stores={stores}
                     workers={workers}
@@ -327,12 +323,12 @@ export default function App() {
                       Back
                     </button>
                   )}
-                  {step < 4 && (
+                  {step < 3 && (
                     <button type="button" className="btn btn-primary" onClick={next}>
-                      {step === 3 ? 'Generate schedule' : 'Next'}
+                      {step === 2 ? 'Generate schedule' : 'Next'}
                     </button>
                   )}
-                  {step === 4 && (
+                  {step === 3 && (
                     <>
                       <button type="button" className="btn" onClick={regenerate}>
                         Regenerate
@@ -360,6 +356,17 @@ export default function App() {
 
         {overlay === 'history' && (
           <HistoryPanel weeks={weeksList} currentWeek={cfg.weekStart} onLoad={openArchivedWeek} onClose={() => setOverlay(null)} />
+        )}
+        {overlay === 'lastweek' && (
+          <LastWeekPanel
+            workers={workers}
+            labels={labels}
+            lastWeek={lastWeek}
+            source={lastWeekSource}
+            onChange={setLastWeek}
+            onSave={saveLastWeek}
+            onClose={() => setOverlay(null)}
+          />
         )}
         {overlay === 'diag' && (
           <DiagnosticsPanel

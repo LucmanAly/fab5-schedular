@@ -69,35 +69,39 @@ export function halvesWorked(row) {
 
 /**
  * Build the week Monday→Sunday, full days only (splits are added by hand afterward).
- * 1. Main at their own store unless on leave / owed rest.
- * 2. Floats, fewest days first, fill uncovered stores.
+ * Worker-store linkage is manual: each worker carries store_ids, an ordered list of the
+ * stores they're allowed to work, first entry = highest preference.
+ * 1. A main whose top-preference store is store X mans it unless on leave / owed rest —
+ *    that's what makes a main "fixed" to their store.
+ * 2. Any store left uncovered is filled from everyone else linked to it (other mains'
+ *    secondary links, and floats), preferring whoever ranks that store highest, then
+ *    whoever has worked the fewest days so far (fairness).
  * 3. Leftovers stay open — surfaced live by computeGaps.
  */
 export function generateSchedule({ stores, workers, leaves, lastWeekWorked, maxConsec }) {
   const schedule = {};
   workers.forEach((w) => (schedule[w.id] = EMPTY_WEEK()));
   const mains = workers.filter((w) => w.type === 'main');
-  const floats = workers.filter((w) => w.type === 'float');
 
   for (let d = 0; d < 7; d++) {
     const uncovered = [];
     for (const store of stores) {
-      const main = mains.find((m) => m.store_id === store.id);
+      const main = mains.find((m) => m.store_ids && m.store_ids[0] === store.id);
       if (main && availability(main, d, schedule, leaves, lastWeekWorked, maxConsec).ok) {
         schedule[main.id][d] = { am: store.id, pm: store.id };
       } else {
         uncovered.push(store.id);
       }
     }
-    const available = floats
-      .filter((f) => availability(f, d, schedule, leaves, lastWeekWorked, maxConsec).ok)
-      .sort((a, b) => daysWorked(schedule[a.id]) - daysWorked(schedule[b.id]));
-    let i = 0;
     for (const storeId of uncovered) {
-      if (i < available.length) {
-        schedule[available[i].id][d] = { am: storeId, pm: storeId };
-        i++;
-      }
+      const candidates = workers
+        .filter((w) => w.store_ids && w.store_ids.includes(storeId) && !worksOn(schedule[w.id], d))
+        .filter((w) => availability(w, d, schedule, leaves, lastWeekWorked, maxConsec).ok)
+        .sort((a, b) => {
+          const prefDiff = a.store_ids.indexOf(storeId) - b.store_ids.indexOf(storeId);
+          return prefDiff !== 0 ? prefDiff : daysWorked(schedule[a.id]) - daysWorked(schedule[b.id]);
+        });
+      if (candidates.length) schedule[candidates[0].id][d] = { am: storeId, pm: storeId };
     }
   }
   return schedule;
