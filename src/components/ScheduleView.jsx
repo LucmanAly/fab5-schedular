@@ -11,7 +11,7 @@ import {
   EMPTY_WEEK,
 } from '../lib/scheduler';
 
-export default function ScheduleView({ stores, workers, schedule, leaves, lastWeek, maxConsec, splitTime, labels, readOnly, onChange, predictability, status }) {
+export default function ScheduleView({ stores, workers, schedule, leaves, lastWeek, maxConsec, labels, readOnly, onChange, predictability, status, splitTimes, onSplitTimesChange }) {
   const [group, setGroup] = useState('store'); // store | worker
   const [mode, setMode] = useState('day'); // day | week  (day is the mobile-first default)
   const [activeDay, setActiveDay] = useState(0);
@@ -221,11 +221,11 @@ export default function ScheduleView({ stores, workers, schedule, leaves, lastWe
                   <div className="store-card-head">{s.name}</div>
                   <div className="store-card-halves">
                     <div className="sch-row">
-                      <span className="sch-time">Morning · {halfLabel(activeDay, 'am', splitTime)}</span>
+                      <span className="sch-time">Morning · {halfLabel(activeDay, 'am', '14:00')}</span>
                       <HalfSlot storeId={s.id} dayIdx={activeDay} half="am" />
                     </div>
                     <div className="sch-row">
-                      <span className="sch-time">Evening · {halfLabel(activeDay, 'pm', splitTime)}</span>
+                      <span className="sch-time">Evening · {halfLabel(activeDay, 'pm', '14:00')}</span>
                       <HalfSlot storeId={s.id} dayIdx={activeDay} half="pm" />
                     </div>
                   </div>
@@ -336,22 +336,28 @@ export default function ScheduleView({ stores, workers, schedule, leaves, lastWe
           store={stores.find((s) => s.id === splitTarget.storeId)}
           dayIdx={splitTarget.dayIdx}
           dayLabel={labels[splitTarget.dayIdx]}
-          splitTime={splitTime}
           storeName={storeName}
           workers={workers}
           schedule={schedule}
           onAssignHalf={assignHalf}
           onClose={() => setSplitTarget(null)}
+          splitTimes={splitTimes}
+          onSplitTimeChange={(key, time) => onSplitTimesChange({ ...splitTimes, [key]: time })}
         />
       )}
     </div>
   );
 }
 
-function SplitShiftSheet({ store, dayIdx, dayLabel, splitTime, storeName, workers, schedule, onAssignHalf, onClose }) {
+function SplitShiftSheet({ store, dayIdx, dayLabel, splitTime, storeName, workers, schedule, onAssignHalf, onClose, splitTimes, onSplitTimeChange }) {
   const am = workerAtHalf(schedule, workers, store.id, dayIdx, 'am');
   const pm = workerAtHalf(schedule, workers, store.id, dayIdx, 'pm');
   const currentWorker = am && am.id === pm?.id ? am : null;
+  const key = `${store.id}-${dayIdx}`;
+  const customSplitTime = splitTimes?.[key] || '14:00';
+
+  const openTime = dayIdx >= 5 ? '09:00' : '08:00'; // Sat/Sun open at 9
+  const closeTime = '22:00';
 
   return (
     <div className="modal-backdrop" onClick={onClose}>
@@ -359,13 +365,24 @@ function SplitShiftSheet({ store, dayIdx, dayLabel, splitTime, storeName, worker
         <div className="sheet-grab" />
         <h3>Split shift — {store.name} · {dayLabel}</h3>
         <p className="hint">
-          Split this full-day shift between two workers. Morning {halfLabel(dayIdx, 'am', splitTime)}, Evening {halfLabel(dayIdx, 'pm', splitTime)}.
+          Choose when to split this day, then assign workers to each half.
         </p>
+
+        <div className="split-time-picker">
+          <label className="split-time-label">
+            <span>Split time (AM ends / PM begins):</span>
+            <input
+              type="time"
+              value={customSplitTime}
+              onChange={(e) => onSplitTimeChange(key, e.target.value)}
+            />
+          </label>
+        </div>
 
         <div className="split-setup">
           <div className="split-half">
             <div className="split-half-label">Morning</div>
-            <div className="split-half-time">{halfLabel(dayIdx, 'am', splitTime)}</div>
+            <div className="split-half-time">{openTime}–{customSplitTime}</div>
             <div className="split-current">
               {am ? (
                 <>
@@ -380,7 +397,7 @@ function SplitShiftSheet({ store, dayIdx, dayLabel, splitTime, storeName, worker
           <div className="split-arrow">→</div>
           <div className="split-half">
             <div className="split-half-label">Evening</div>
-            <div className="split-half-time">{halfLabel(dayIdx, 'pm', splitTime)}</div>
+            <div className="split-half-time">{customSplitTime}–{closeTime}</div>
             <div className="split-current">
               {pm ? (
                 <>
@@ -394,7 +411,7 @@ function SplitShiftSheet({ store, dayIdx, dayLabel, splitTime, storeName, worker
           </div>
         </div>
 
-        <p className="hint" style={{ marginTop: '12px' }}>Choose a worker for each half, or keep it as-is:</p>
+        <p className="hint" style={{ marginTop: '12px' }}>Choose a worker for each half:</p>
 
         <ul className="picker">
           {workers.map((w) => (
@@ -452,7 +469,7 @@ function ReassignSheet({ store, dayIdx, dayLabel, splitTime, storeName, workers,
           {store.name} — {dayLabel}
         </h3>
         <p className="hint">
-          Assign a whole day, or split it: morning {halfLabel(dayIdx, 'am', splitTime)}, evening {halfLabel(dayIdx, 'pm', splitTime)}.
+          Assign a whole day, or split it: morning {halfLabel(dayIdx, 'am', '14:00')}, evening {halfLabel(dayIdx, 'pm', '14:00')}.
           Warnings never block your choice.
         </p>
 

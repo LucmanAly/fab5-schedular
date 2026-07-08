@@ -6,8 +6,9 @@ import { StepInit, StepConfigure } from './components/StepsSetup';
 import CheckGrid from './components/CheckGrid';
 import ScheduleView from './components/ScheduleView';
 import { HistoryPanel, DiagnosticsPanel, FinalizePanel, PrintOverlay } from './components/Overlays';
+import SettingsPanel from './components/SettingsPanel';
 
-const STEPS = ['Set up', 'Names', 'Last week', 'Leave', 'Schedule'];
+const STEPS = ['Last week', 'Leave', 'Schedule'];
 
 function resizeSetup(numStores, numFloats, prevStores, prevWorkers) {
   const stores = Array.from({ length: numStores }, (_, i) => {
@@ -25,7 +26,8 @@ function resizeSetup(numStores, numFloats, prevStores, prevWorkers) {
 
 export default function App() {
   const [step, setStep] = useState(0);
-  const [cfg, setCfg] = useState({ numStores: 8, numFloats: 6, maxConsec: 3, splitTime: '14:00', weekStart: nextMonday() });
+  const [cfg, setCfg] = useState({ numStores: 8, numFloats: 6, maxConsec: 3, weekStart: nextMonday() });
+  const [splitTimes, setSplitTimes] = useState({}); // { "storeId-dayIdx": "14:00" }
   const [stores, setStores] = useState([]);
   const [workers, setWorkers] = useState([]);
   const [lastWeek, setLastWeek] = useState({});
@@ -42,6 +44,7 @@ export default function App() {
   const [printMode, setPrintMode] = useState(null);
   const [loading, setLoading] = useState(cloud.enabled);
   const [finalizingWeek, setFinalizingWeek] = useState(false);
+  const [showSettings, setShowSettings] = useState(false);
 
   const labels = useMemo(() => dayLabels(cfg.weekStart), [cfg.weekStart]);
 
@@ -56,7 +59,6 @@ export default function App() {
             numStores: config.num_stores,
             numFloats: config.num_floats,
             maxConsec: config.max_consecutive,
-            splitTime: config.split_time || '14:00',
           }));
         }
         if (st.length) setStores(st);
@@ -118,26 +120,22 @@ export default function App() {
 
   async function next() {
     if (step === 0) {
-      const sized = resizeSetup(cfg.numStores, cfg.numFloats, stores, workers);
-      setStores(sized.stores);
-      setWorkers(sized.workers);
-      withSave(() => cloud.saveSetup(cfg, sized.stores, sized.workers));
+      // Step 0: Load last week
+      await prefillLastWeek();
+      persistWeek();
       setStep(1);
     } else if (step === 1) {
-      withSave(() => cloud.saveSetup(cfg, stores, workers));
-      await prefillLastWeek();
+      // Step 1: Leaves set, move to schedule generation
+      persistWeek();
       setStep(2);
     } else if (step === 2) {
-      persistWeek();
-      setStep(3);
-    } else if (step === 3) {
+      // Step 2: Generate schedule
       const fresh = generateSchedule({ stores, workers, leaves, lastWeekWorked: lastWeek, maxConsec: cfg.maxConsec });
       setSchedule(fresh);
       setScheduleStatus('draft');
       const pred = compareWeeks(archivedSchedule || {}, fresh, workers);
       setPredictability(pred);
       persistWeek({ schedule: fresh });
-      setStep(4);
     }
   }
 
@@ -194,6 +192,13 @@ export default function App() {
     }
   }
 
+  function handleSaveSettings(newCfg, newStores, newWorkers) {
+    setCfg(newCfg);
+    setStores(newStores);
+    setWorkers(newWorkers);
+    withSave(() => cloud.saveSetup(newCfg, newStores, newWorkers));
+  }
+
   const shown = viewing || { weekStart: cfg.weekStart, schedule, leaves };
   const shownLabels = viewing ? dayLabels(viewing.weekStart) : labels;
 
@@ -214,6 +219,14 @@ export default function App() {
             <span className="brand-sub">BOARD</span>
           </div>
           <div className="topbar-right">
+            <button
+              type="button"
+              className="btn btn-ghost btn-light"
+              onClick={() => setShowSettings(true)}
+              title="Schedule settings"
+            >
+              ⚙️ Settings
+            </button>
             <button
               type="button"
               className={`badge ${badge[0]}`}
@@ -284,9 +297,7 @@ export default function App() {
               </div>
             ) : (
               <>
-                {step === 0 && <StepInit cfg={cfg} onChange={setCfg} />}
-                {step === 1 && <StepConfigure stores={stores} workers={workers} onStores={setStores} onWorkers={setWorkers} />}
-                {step === 2 && (
+                {step === 0 && (
                   <div className="panel">
                     <h2>Who worked last week?</h2>
                     <p className="hint">
@@ -297,14 +308,14 @@ export default function App() {
                     <CheckGrid workers={workers} labels={labels} value={lastWeek} onChange={setLastWeek} tone="worked" />
                   </div>
                 )}
-                {step === 3 && (
+                {step === 1 && (
                   <div className="panel">
                     <h2>Leave requests</h2>
                     <p className="hint">Tick each person's days off. The generator plans around them.</p>
                     <CheckGrid workers={workers} labels={labels} value={leaves} onChange={setLeaves} tone="leave" />
                   </div>
                 )}
-                {step === 4 && schedule && (
+                {step === 2 && schedule && (
                   <ScheduleView
                     stores={stores}
                     workers={workers}
@@ -312,12 +323,13 @@ export default function App() {
                     leaves={leaves}
                     lastWeek={lastWeek}
                     maxConsec={cfg.maxConsec}
-                    splitTime={cfg.splitTime}
                     labels={labels}
                     readOnly={false}
                     onChange={editSchedule}
                     predictability={predictability}
                     status={scheduleStatus}
+                    splitTimes={splitTimes}
+                    onSplitTimesChange={setSplitTimes}
                   />
                 )}
 
@@ -327,12 +339,12 @@ export default function App() {
                       Back
                     </button>
                   )}
-                  {step < 4 && (
+                  {step < 2 && (
                     <button type="button" className="btn btn-primary" onClick={next}>
-                      {step === 3 ? 'Generate schedule' : 'Next'}
+                      {step === 1 ? 'Generate schedule' : 'Next'}
                     </button>
                   )}
-                  {step === 4 && (
+                  {step === 2 && (
                     <>
                       <button type="button" className="btn" onClick={regenerate}>
                         Regenerate
@@ -379,6 +391,15 @@ export default function App() {
             onCancel={() => setOverlay(null)}
           />
         )}
+
+        <SettingsPanel
+          isOpen={showSettings}
+          cfg={cfg}
+          stores={stores}
+          workers={workers}
+          onSave={handleSaveSettings}
+          onClose={() => setShowSettings(false)}
+        />
       </div>
 
       {printMode && (

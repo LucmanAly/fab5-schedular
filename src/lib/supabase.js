@@ -78,7 +78,6 @@ export async function saveSetup(config, stores, workers) {
       num_stores: config.numStores,
       num_floats: config.numFloats,
       max_consecutive: config.maxConsec,
-      split_time: config.splitTime,
     },
   });
   await sb('stores?id=gte.0', { method: 'DELETE', prefer: 'return=minimal' });
