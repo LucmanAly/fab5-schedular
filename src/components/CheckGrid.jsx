@@ -24,7 +24,9 @@ export default function CheckGrid({ workers, labels, value, onChange, tone }) {
             <tr key={w.id}>
               <td className="sticky-col name-cell">
                 {w.name}
-                <span className={`chip chip-${w.type}`}>{w.type}</span>
+                <span className={`chip chip-${w.main_store_id != null ? 'main' : 'float'}`}>
+                  {w.main_store_id != null ? 'main' : 'float'}
+                </span>
               </td>
               {labels.map((_, d) => {
                 const on = value[w.id] && value[w.id][d];

@@ -1,26 +1,23 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { DAY_NAMES, workerAtHalf, formatWeek } from '../lib/scheduler';
 
-export function HistoryPanel({ weeks, currentWeek, onLoad, onClose }) {
+/**
+ * Tier 1 destructive confirmation (§8) — for rare, hard-to-reverse deletes
+ * (whole worker / whole store). Reuses the violation-box styling so it reads
+ * as native, not a browser popup.
+ */
+export function ConfirmModal({ title, body, confirmLabel = 'Delete', onConfirm, onCancel }) {
   return (
-    <div className="modal-backdrop" onClick={onClose}>
-      <div className="modal sheet" role="dialog" aria-modal="true" onClick={(e) => e.stopPropagation()}>
-        <div className="sheet-grab" />
-        <h3>Schedule history</h3>
-        {weeks.length === 0 && <p className="hint">Nothing archived yet — every week you build is saved here.</p>}
-        <ul className="picker">
-          {weeks.map((w) => (
-            <li key={w.week_start}>
-              <button type="button" className="pick pick-row" onClick={() => onLoad(w.week_start)}>
-                <span className="pick-name">Week of {formatWeek(w.week_start)}</span>
-                <span className="pick-status">{w.week_start === currentWeek ? 'current' : w.status}</span>
-              </button>
-            </li>
-          ))}
-        </ul>
-        <div className="modal-actions">
-          <button type="button" className="btn btn-ghost" onClick={onClose}>
-            Close
+    <div className="modal-backdrop" onClick={onCancel}>
+      <div className="violation-box confirm-modal" role="alertdialog" aria-modal="true" onClick={(e) => e.stopPropagation()}>
+        <h3 className="violation-title">⚠ {title}</h3>
+        <p className="confirm-body">{body}</p>
+        <div className="violation-actions">
+          <button type="button" className="btn btn-ghost" onClick={onCancel}>
+            Cancel
+          </button>
+          <button type="button" className="btn btn-danger" onClick={onConfirm}>
+            {confirmLabel}
           </button>
         </div>
       </div>
@@ -28,46 +25,51 @@ export function HistoryPanel({ weeks, currentWeek, onLoad, onClose }) {
   );
 }
 
-export function FinalizePanel({ weekStart, predictability, saving, onFinalize, onCancel }) {
-  const gaps = predictability?.totalSlots || 0; // This is used to show if there are issues
+/**
+ * Tier 2 (§8) — undo toast for frequent low-stakes removals. The action has
+ * already been applied; the toast offers a ~5s window to reverse it.
+ */
+export function UndoToast({ toast, onUndo, onExpire }) {
+  useEffect(() => {
+    if (!toast) return undefined;
+    const t = setTimeout(onExpire, 5000);
+    return () => clearTimeout(t);
+  }, [toast, onExpire]);
+  if (!toast) return null;
+  return (
+    <div className="undo-toast" role="status">
+      <span className="undo-toast-msg">{toast.message}</span>
+      {toast.undo && (
+        <button type="button" className="undo-toast-btn" onClick={onUndo}>
+          Undo
+        </button>
+      )}
+    </div>
+  );
+}
+
+export function SaveSheet({ weekStart, openSlots, saving, onSave, onCancel }) {
   return (
     <div className="modal-backdrop" onClick={onCancel}>
       <div className="modal sheet" role="dialog" aria-modal="true" onClick={(e) => e.stopPropagation()}>
         <div className="sheet-grab" />
-        <h3>Finalize schedule?</h3>
-        <p className="hint">Once finalized, this schedule is locked. You can still view and print it, but changes require creating a new week.</p>
-
-        <div className="finalize-summary">
-          {predictability && (
-            <>
-              <div className="finalize-stat">
-                <span className="finalize-label">Similarity to last week:</span>
-                <span className="finalize-value">{predictability.similarityPercent}%</span>
-              </div>
-              <div className="finalize-stat">
-                <span className="finalize-label">Shifts assigned:</span>
-                <span className="finalize-value">{predictability.identicalSlots} of {predictability.totalSlots}</span>
-              </div>
-            </>
-          )}
-          <div className="finalize-stat">
-            <span className="finalize-label">Week starting:</span>
-            <span className="finalize-value">{formatWeek(weekStart)}</span>
-          </div>
-        </div>
-
-        <p className="hint" style={{ marginTop: '12px', fontWeight: 500 }}>
-          ✓ Review complete<br/>
-          ✓ All gaps are acceptable<br/>
-          ✓ Ready to publish
+        <h3>Save this schedule?</h3>
+        <p className="hint">
+          Saving commits the week of {formatWeek(weekStart)}, enables printing, and archives it. Only the two most
+          recent weeks are kept — saving replaces the oldest.
         </p>
-
+        {openSlots > 0 && (
+          <p className="hint" style={{ color: 'var(--gap)', fontWeight: 600 }}>
+            ⚠ {openSlots} shift slot{openSlots > 1 ? 's are' : ' is'} still OPEN. You can save anyway and fill them on
+            paper, or go back and assign someone.
+          </p>
+        )}
         <div className="modal-actions">
           <button type="button" className="btn btn-ghost" onClick={onCancel} disabled={saving}>
             Keep editing
           </button>
-          <button type="button" className="btn btn-primary" onClick={onFinalize} disabled={saving}>
-            {saving ? 'Finalizing…' : 'Finalize Now'}
+          <button type="button" className="btn btn-primary" onClick={onSave} disabled={saving}>
+            {saving ? 'Saving…' : 'Save schedule'}
           </button>
         </div>
       </div>
@@ -123,10 +125,13 @@ export function DiagnosticsPanel({ status, diag, lastError, onTest, onClose }) {
           <summary>Common fixes</summary>
           <ol>
             <li>
-              After adding the two keys in Netlify, you must redeploy: <strong>Deploys → Trigger deploy → Clear cache and deploy site</strong>. Keys are baked in at build time, so a build from before you added them won't have them.
+              After adding the two keys in Netlify, you must redeploy: <strong>Deploys → Trigger deploy → Clear cache
+              and deploy site</strong>. Keys are baked in at build time, so a build from before you added them won't
+              have them.
             </li>
             <li>
-              Run <strong>supabase-setup.sql</strong> in Supabase (SQL Editor → New query → paste → Run). A missing-table error means this step was skipped or run in a different project.
+              Run <strong>supabase-setup.sql</strong> in Supabase (SQL Editor → New query → paste → Run). A
+              missing-table error means this step was skipped or run in a different project.
             </li>
             <li>Check the two variable names are exactly <code>VITE_SUPABASE_URL</code> and <code>VITE_SUPABASE_ANON_KEY</code>.</li>
             <li>Confirm the URL and key come from the same Supabase project (Settings → Data API for the URL, Settings → API Keys for the key).</li>
@@ -187,7 +192,8 @@ export function PrintOverlay({ mode, weekStart, stores, workers, schedule, leave
             {workers.map((w) => (
               <section key={w.id} className="print-block">
                 <h2>
-                  {w.name} <em>({w.type === 'main' ? `main — ${storeName(w.store_id)}` : 'floating'})</em>
+                  {w.name}{' '}
+                  <em>({w.main_store_id != null ? `main — ${storeName(w.main_store_id)}` : 'float'})</em>
                 </h2>
                 <table>
                   <thead>

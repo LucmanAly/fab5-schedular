@@ -1,0 +1,12 @@
+node_modules/
+dist/
+.git/
+graphify-out/
+package-lock.json
+.env
+.env.local
+# duplicate working copies + local session config — would pollute the graph badly
+.claude/
+# git hook shims, no project logic
+.husky/
+*.log
