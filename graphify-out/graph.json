@@ -4,235 +4,15 @@
   "graph": {},
   "nodes": [
     {
-      "label": "package.json",
-      "file_type": "code",
-      "source_file": "package.json",
-      "source_location": "L1",
-      "_origin": "ast",
-      "community": 2,
-      "norm_label": "package.json",
-      "id": "package",
-      "community_name": "package.json"
-    },
-    {
-      "label": "name",
-      "file_type": "code",
-      "source_file": "package.json",
-      "source_location": "L2",
-      "_origin": "ast",
-      "community": 2,
-      "norm_label": "name",
-      "id": "package_name",
-      "community_name": "package.json"
-    },
-    {
-      "label": "private",
-      "file_type": "code",
-      "source_file": "package.json",
-      "source_location": "L3",
-      "_origin": "ast",
-      "community": 2,
-      "norm_label": "private",
-      "id": "package_private",
-      "community_name": "package.json"
-    },
-    {
-      "label": "version",
-      "file_type": "code",
-      "source_file": "package.json",
-      "source_location": "L4",
-      "_origin": "ast",
-      "community": 2,
-      "norm_label": "version",
-      "id": "package_version",
-      "community_name": "package.json"
-    },
-    {
-      "label": "type",
-      "file_type": "code",
-      "source_file": "package.json",
-      "source_location": "L5",
-      "_origin": "ast",
-      "community": 2,
-      "norm_label": "type",
-      "id": "package_type",
-      "community_name": "package.json"
-    },
-    {
-      "label": "scripts",
-      "file_type": "code",
-      "source_file": "package.json",
-      "source_location": "L6",
-      "_origin": "ast",
-      "community": 2,
-      "norm_label": "scripts",
-      "id": "package_scripts",
-      "community_name": "package.json"
-    },
-    {
-      "label": "dev",
-      "file_type": "code",
-      "source_file": "package.json",
-      "source_location": "L7",
-      "_origin": "ast",
-      "community": 2,
-      "norm_label": "dev",
-      "id": "package_scripts_dev",
-      "community_name": "package.json"
-    },
-    {
-      "label": "build",
-      "file_type": "code",
-      "source_file": "package.json",
-      "source_location": "L8",
-      "_origin": "ast",
-      "community": 2,
-      "norm_label": "build",
-      "id": "package_scripts_build",
-      "community_name": "package.json"
-    },
-    {
-      "label": "preview",
-      "file_type": "code",
-      "source_file": "package.json",
-      "source_location": "L9",
-      "_origin": "ast",
-      "community": 2,
-      "norm_label": "preview",
-      "id": "package_scripts_preview",
-      "community_name": "package.json"
-    },
-    {
-      "label": "test",
-      "file_type": "code",
-      "source_file": "package.json",
-      "source_location": "L10",
-      "_origin": "ast",
-      "community": 2,
-      "norm_label": "test",
-      "id": "package_scripts_test",
-      "community_name": "package.json"
-    },
-    {
-      "label": "dependencies",
-      "file_type": "code",
-      "source_file": "package.json",
-      "source_location": "L12",
-      "_origin": "ast",
-      "community": 2,
-      "norm_label": "dependencies",
-      "id": "package_dependencies",
-      "community_name": "package.json"
-    },
-    {
-      "label": "react",
-      "file_type": "code",
-      "source_file": "package.json",
-      "source_location": "L13",
-      "_origin": "ast",
-      "community": 2,
-      "norm_label": "react",
-      "id": "package_dependencies_react",
-      "community_name": "package.json"
-    },
-    {
-      "label": "react",
-      "file_type": "concept",
-      "source_file": "package.json",
-      "source_location": "L13",
-      "_origin": "ast",
-      "community": 2,
-      "norm_label": "react",
-      "id": "react",
-      "community_name": "package.json"
-    },
-    {
-      "label": "react-dom",
-      "file_type": "code",
-      "source_file": "package.json",
-      "source_location": "L14",
-      "_origin": "ast",
-      "community": 2,
-      "norm_label": "react-dom",
-      "id": "package_dependencies_react_dom",
-      "community_name": "package.json"
-    },
-    {
-      "label": "react-dom",
-      "file_type": "concept",
-      "source_file": "package.json",
-      "source_location": "L14",
-      "_origin": "ast",
-      "community": 2,
-      "norm_label": "react-dom",
-      "id": "react_dom",
-      "community_name": "package.json"
-    },
-    {
-      "label": "devDependencies",
-      "file_type": "code",
-      "source_file": "package.json",
-      "source_location": "L16",
-      "_origin": "ast",
-      "community": 2,
-      "norm_label": "devdependencies",
-      "id": "package_devdependencies",
-      "community_name": "package.json"
-    },
-    {
-      "label": "@vitejs/plugin-react",
-      "file_type": "code",
-      "source_file": "package.json",
-      "source_location": "L17",
-      "_origin": "ast",
-      "community": 2,
-      "norm_label": "@vitejs/plugin-react",
-      "id": "package_devdependencies_vitejs_plugin_react",
-      "community_name": "package.json"
-    },
-    {
-      "label": "@vitejs/plugin-react",
-      "file_type": "concept",
-      "source_file": "package.json",
-      "source_location": "L17",
-      "_origin": "ast",
-      "community": 2,
-      "norm_label": "@vitejs/plugin-react",
-      "id": "vitejs_plugin_react",
-      "community_name": "package.json"
-    },
-    {
-      "label": "vite",
-      "file_type": "code",
-      "source_file": "package.json",
-      "source_location": "L18",
-      "_origin": "ast",
-      "community": 2,
-      "norm_label": "vite",
-      "id": "package_devdependencies_vite",
-      "community_name": "package.json"
-    },
-    {
-      "label": "vite",
-      "file_type": "concept",
-      "source_file": "package.json",
-      "source_location": "L18",
-      "_origin": "ast",
-      "community": 2,
-      "norm_label": "vite",
-      "id": "vite",
-      "community_name": "package.json"
-    },
-    {
       "label": "App.jsx",
       "file_type": "code",
       "source_file": "src/App.jsx",
       "source_location": "L1",
       "_origin": "ast",
-      "community": 1,
+      "community": 5,
       "norm_label": "app.jsx",
-      "id": "src_app",
-      "community_name": "App.jsx"
+      "community_name": "App.jsx",
+      "id": "src_app"
     },
     {
       "label": "WIZARD_STEPS",
@@ -240,10 +20,10 @@
       "source_file": "src/App.jsx",
       "source_location": "L24",
       "_origin": "ast",
-      "community": 1,
+      "community": 5,
       "norm_label": "wizard_steps",
-      "id": "src_app_wizard_steps",
-      "community_name": "App.jsx"
+      "community_name": "App.jsx",
+      "id": "src_app_wizard_steps"
     },
     {
       "label": "emptyWizard()",
@@ -251,10 +31,10 @@
       "source_file": "src/App.jsx",
       "source_location": "L26",
       "_origin": "ast",
-      "community": 1,
+      "community": 8,
       "norm_label": "emptywizard()",
-      "id": "src_app_emptywizard",
-      "community_name": "App.jsx"
+      "community_name": "App.jsx",
+      "id": "src_app_emptywizard"
     },
     {
       "label": "versionEntry()",
@@ -262,10 +42,10 @@
       "source_file": "src/App.jsx",
       "source_location": "L37",
       "_origin": "ast",
-      "community": 1,
+      "community": 5,
       "norm_label": "versionentry()",
-      "id": "src_app_versionentry",
-      "community_name": "App.jsx"
+      "community_name": "App.jsx",
+      "id": "src_app_versionentry"
     },
     {
       "label": "sameVersion()",
@@ -273,10 +53,10 @@
       "source_file": "src/App.jsx",
       "source_location": "L44",
       "_origin": "ast",
-      "community": 1,
+      "community": 5,
       "norm_label": "sameversion()",
-      "id": "src_app_sameversion",
-      "community_name": "App.jsx"
+      "community_name": "App.jsx",
+      "id": "src_app_sameversion"
     },
     {
       "label": "App()",
@@ -284,10 +64,10 @@
       "source_file": "src/App.jsx",
       "source_location": "L49",
       "_origin": "ast",
-      "community": 1,
+      "community": 8,
       "norm_label": "app()",
-      "id": "src_app_app",
-      "community_name": "App.jsx"
+      "community_name": "App.jsx",
+      "id": "src_app_app"
     },
     {
       "label": "ViolationBox()",
@@ -295,10 +75,10 @@
       "source_file": "src/App.jsx",
       "source_location": "L932",
       "_origin": "ast",
-      "community": 1,
+      "community": 5,
       "norm_label": "violationbox()",
-      "id": "src_app_violationbox",
-      "community_name": "App.jsx"
+      "community_name": "App.jsx",
+      "id": "src_app_violationbox"
     },
     {
       "label": "CheckGrid.jsx",
@@ -306,10 +86,10 @@
       "source_file": "src/components/CheckGrid.jsx",
       "source_location": "L1",
       "_origin": "ast",
-      "community": 1,
+      "community": 5,
       "norm_label": "checkgrid.jsx",
-      "id": "src_components_checkgrid",
-      "community_name": "App.jsx"
+      "community_name": "App.jsx",
+      "id": "src_components_checkgrid"
     },
     {
       "label": "CheckGrid()",
@@ -317,10 +97,10 @@
       "source_file": "src/components/CheckGrid.jsx",
       "source_location": "L2",
       "_origin": "ast",
-      "community": 1,
+      "community": 5,
       "norm_label": "checkgrid()",
-      "id": "src_components_checkgrid_checkgrid",
-      "community_name": "App.jsx"
+      "community_name": "App.jsx",
+      "id": "src_components_checkgrid_checkgrid"
     },
     {
       "label": "FindCover.jsx",
@@ -328,10 +108,10 @@
       "source_file": "src/components/FindCover.jsx",
       "source_location": "L1",
       "_origin": "ast",
-      "community": 0,
+      "community": 3,
       "norm_label": "findcover.jsx",
-      "id": "src_components_findcover",
-      "community_name": "scheduler.js"
+      "community_name": "scheduler.js",
+      "id": "src_components_findcover"
     },
     {
       "label": "FindCover()",
@@ -339,10 +119,10 @@
       "source_file": "src/components/FindCover.jsx",
       "source_location": "L21",
       "_origin": "ast",
-      "community": 0,
+      "community": 1,
       "norm_label": "findcover()",
-      "id": "src_components_findcover_findcover",
-      "community_name": "scheduler.js"
+      "community_name": "scheduler.js",
+      "id": "src_components_findcover_findcover"
     },
     {
       "label": "LockGrid.jsx",
@@ -350,10 +130,10 @@
       "source_file": "src/components/LockGrid.jsx",
       "source_location": "L1",
       "_origin": "ast",
-      "community": 1,
+      "community": 5,
       "norm_label": "lockgrid.jsx",
-      "id": "src_components_lockgrid",
-      "community_name": "App.jsx"
+      "community_name": "App.jsx",
+      "id": "src_components_lockgrid"
     },
     {
       "label": "LockGrid()",
@@ -361,10 +141,10 @@
       "source_file": "src/components/LockGrid.jsx",
       "source_location": "L6",
       "_origin": "ast",
-      "community": 1,
+      "community": 5,
       "norm_label": "lockgrid()",
-      "id": "src_components_lockgrid_lockgrid",
-      "community_name": "App.jsx"
+      "community_name": "App.jsx",
+      "id": "src_components_lockgrid_lockgrid"
     },
     {
       "label": "Overlays.jsx",
@@ -372,10 +152,10 @@
       "source_file": "src/components/Overlays.jsx",
       "source_location": "L1",
       "_origin": "ast",
-      "community": 4,
+      "community": 6,
       "norm_label": "overlays.jsx",
-      "id": "src_components_overlays",
-      "community_name": "Overlays.jsx"
+      "community_name": "Overlays.jsx",
+      "id": "src_components_overlays"
     },
     {
       "label": "ConfirmModal()",
@@ -383,10 +163,10 @@
       "source_file": "src/components/Overlays.jsx",
       "source_location": "L9",
       "_origin": "ast",
-      "community": 4,
+      "community": 7,
       "norm_label": "confirmmodal()",
-      "id": "src_components_overlays_confirmmodal",
-      "community_name": "Overlays.jsx"
+      "community_name": "Overlays.jsx",
+      "id": "src_components_overlays_confirmmodal"
     },
     {
       "label": "UndoToast()",
@@ -394,10 +174,10 @@
       "source_file": "src/components/Overlays.jsx",
       "source_location": "L32",
       "_origin": "ast",
-      "community": 4,
+      "community": 6,
       "norm_label": "undotoast()",
-      "id": "src_components_overlays_undotoast",
-      "community_name": "Overlays.jsx"
+      "community_name": "Overlays.jsx",
+      "id": "src_components_overlays_undotoast"
     },
     {
       "label": "SaveSheet()",
@@ -405,10 +185,10 @@
       "source_file": "src/components/Overlays.jsx",
       "source_location": "L51",
       "_origin": "ast",
-      "community": 4,
+      "community": 6,
       "norm_label": "savesheet()",
-      "id": "src_components_overlays_savesheet",
-      "community_name": "Overlays.jsx"
+      "community_name": "Overlays.jsx",
+      "id": "src_components_overlays_savesheet"
     },
     {
       "label": "DiagnosticsPanel()",
@@ -416,10 +196,10 @@
       "source_file": "src/components/Overlays.jsx",
       "source_location": "L80",
       "_origin": "ast",
-      "community": 4,
+      "community": 6,
       "norm_label": "diagnosticspanel()",
-      "id": "src_components_overlays_diagnosticspanel",
-      "community_name": "Overlays.jsx"
+      "community_name": "Overlays.jsx",
+      "id": "src_components_overlays_diagnosticspanel"
     },
     {
       "label": "daySummaryByWorker()",
@@ -427,10 +207,10 @@
       "source_file": "src/components/Overlays.jsx",
       "source_location": "L151",
       "_origin": "ast",
-      "community": 4,
+      "community": 6,
       "norm_label": "daysummarybyworker()",
-      "id": "src_components_overlays_daysummarybyworker",
-      "community_name": "Overlays.jsx"
+      "community_name": "Overlays.jsx",
+      "id": "src_components_overlays_daysummarybyworker"
     },
     {
       "label": "daySummaryByStore()",
@@ -438,10 +218,10 @@
       "source_file": "src/components/Overlays.jsx",
       "source_location": "L160",
       "_origin": "ast",
-      "community": 4,
+      "community": 6,
       "norm_label": "daysummarybystore()",
-      "id": "src_components_overlays_daysummarybystore",
-      "community_name": "Overlays.jsx"
+      "community_name": "Overlays.jsx",
+      "id": "src_components_overlays_daysummarybystore"
     },
     {
       "label": "PrintOverlay()",
@@ -449,10 +229,10 @@
       "source_file": "src/components/Overlays.jsx",
       "source_location": "L170",
       "_origin": "ast",
-      "community": 4,
+      "community": 6,
       "norm_label": "printoverlay()",
-      "id": "src_components_overlays_printoverlay",
-      "community_name": "Overlays.jsx"
+      "community_name": "Overlays.jsx",
+      "id": "src_components_overlays_printoverlay"
     },
     {
       "label": "ScheduleView.jsx",
@@ -460,10 +240,10 @@
       "source_file": "src/components/ScheduleView.jsx",
       "source_location": "L1",
       "_origin": "ast",
-      "community": 3,
+      "community": 1,
       "norm_label": "scheduleview.jsx",
-      "id": "src_components_scheduleview",
-      "community_name": "ScheduleView.jsx"
+      "community_name": "ScheduleView.jsx",
+      "id": "src_components_scheduleview"
     },
     {
       "label": "ScheduleView()",
@@ -471,10 +251,10 @@
       "source_file": "src/components/ScheduleView.jsx",
       "source_location": "L31",
       "_origin": "ast",
-      "community": 3,
+      "community": 1,
       "norm_label": "scheduleview()",
-      "id": "src_components_scheduleview_scheduleview",
-      "community_name": "ScheduleView.jsx"
+      "community_name": "ScheduleView.jsx",
+      "id": "src_components_scheduleview_scheduleview"
     },
     {
       "label": "CellEditor()",
@@ -482,10 +262,10 @@
       "source_file": "src/components/ScheduleView.jsx",
       "source_location": "L434",
       "_origin": "ast",
-      "community": 3,
+      "community": 1,
       "norm_label": "celleditor()",
-      "id": "src_components_scheduleview_celleditor",
-      "community_name": "ScheduleView.jsx"
+      "community_name": "ScheduleView.jsx",
+      "id": "src_components_scheduleview_celleditor"
     },
     {
       "label": "SettingsPanel.jsx",
@@ -493,10 +273,10 @@
       "source_file": "src/components/SettingsPanel.jsx",
       "source_location": "L1",
       "_origin": "ast",
-      "community": 4,
+      "community": 7,
       "norm_label": "settingspanel.jsx",
-      "id": "src_components_settingspanel",
-      "community_name": "Overlays.jsx"
+      "community_name": "Overlays.jsx",
+      "id": "src_components_settingspanel"
     },
     {
       "label": "norm()",
@@ -504,10 +284,10 @@
       "source_file": "src/components/SettingsPanel.jsx",
       "source_location": "L9",
       "_origin": "ast",
-      "community": 4,
+      "community": 7,
       "norm_label": "norm()",
-      "id": "src_components_settingspanel_norm",
-      "community_name": "Overlays.jsx"
+      "community_name": "Overlays.jsx",
+      "id": "src_components_settingspanel_norm"
     },
     {
       "label": "STORE_DEFAULTS",
@@ -515,10 +295,10 @@
       "source_file": "src/components/SettingsPanel.jsx",
       "source_location": "L11",
       "_origin": "ast",
-      "community": 4,
+      "community": 7,
       "norm_label": "store_defaults",
-      "id": "src_components_settingspanel_store_defaults",
-      "community_name": "Overlays.jsx"
+      "community_name": "Overlays.jsx",
+      "id": "src_components_settingspanel_store_defaults"
     },
     {
       "label": "SettingsPage()",
@@ -526,10 +306,10 @@
       "source_file": "src/components/SettingsPanel.jsx",
       "source_location": "L19",
       "_origin": "ast",
-      "community": 4,
+      "community": 7,
       "norm_label": "settingspage()",
-      "id": "src_components_settingspanel_settingspage",
-      "community_name": "Overlays.jsx"
+      "community_name": "Overlays.jsx",
+      "id": "src_components_settingspanel_settingspage"
     },
     {
       "label": "WorkerCard()",
@@ -537,10 +317,10 @@
       "source_file": "src/components/SettingsPanel.jsx",
       "source_location": "L397",
       "_origin": "ast",
-      "community": 4,
+      "community": 7,
       "norm_label": "workercard()",
-      "id": "src_components_settingspanel_workercard",
-      "community_name": "Overlays.jsx"
+      "community_name": "Overlays.jsx",
+      "id": "src_components_settingspanel_workercard"
     },
     {
       "label": "AddWorkerSheet()",
@@ -548,10 +328,10 @@
       "source_file": "src/components/SettingsPanel.jsx",
       "source_location": "L489",
       "_origin": "ast",
-      "community": 4,
+      "community": 7,
       "norm_label": "addworkersheet()",
-      "id": "src_components_settingspanel_addworkersheet",
-      "community_name": "Overlays.jsx"
+      "community_name": "Overlays.jsx",
+      "id": "src_components_settingspanel_addworkersheet"
     },
     {
       "label": "StoreTypeahead()",
@@ -559,10 +339,10 @@
       "source_file": "src/components/SettingsPanel.jsx",
       "source_location": "L600",
       "_origin": "ast",
-      "community": 4,
+      "community": 7,
       "norm_label": "storetypeahead()",
-      "id": "src_components_settingspanel_storetypeahead",
-      "community_name": "Overlays.jsx"
+      "community_name": "Overlays.jsx",
+      "id": "src_components_settingspanel_storetypeahead"
     },
     {
       "label": "scheduler.js",
@@ -570,10 +350,10 @@
       "source_file": "src/lib/scheduler.js",
       "source_location": "L1",
       "_origin": "ast",
-      "community": 0,
+      "community": 2,
       "norm_label": "scheduler.js",
-      "id": "src_lib_scheduler",
-      "community_name": "scheduler.js"
+      "community_name": "scheduler.js",
+      "id": "src_lib_scheduler"
     },
     {
       "label": "DAY_NAMES",
@@ -581,10 +361,10 @@
       "source_file": "src/lib/scheduler.js",
       "source_location": "L35",
       "_origin": "ast",
-      "community": 4,
+      "community": 6,
       "norm_label": "day_names",
-      "id": "src_lib_scheduler_day_names",
-      "community_name": "Overlays.jsx"
+      "community_name": "Overlays.jsx",
+      "id": "src_lib_scheduler_day_names"
     },
     {
       "label": "HALVES",
@@ -592,10 +372,10 @@
       "source_file": "src/lib/scheduler.js",
       "source_location": "L36",
       "_origin": "ast",
-      "community": 3,
+      "community": 2,
       "norm_label": "halves",
-      "id": "src_lib_scheduler_halves",
-      "community_name": "ScheduleView.jsx"
+      "community_name": "ScheduleView.jsx",
+      "id": "src_lib_scheduler_halves"
     },
     {
       "label": "emptyDay()",
@@ -603,10 +383,10 @@
       "source_file": "src/lib/scheduler.js",
       "source_location": "L44",
       "_origin": "ast",
-      "community": 0,
+      "community": 3,
       "norm_label": "emptyday()",
-      "id": "src_lib_scheduler_emptyday",
-      "community_name": "scheduler.js"
+      "community_name": "scheduler.js",
+      "id": "src_lib_scheduler_emptyday"
     },
     {
       "label": "EMPTY_WEEK()",
@@ -614,10 +394,10 @@
       "source_file": "src/lib/scheduler.js",
       "source_location": "L45",
       "_origin": "ast",
-      "community": 0,
+      "community": 3,
       "norm_label": "empty_week()",
-      "id": "src_lib_scheduler_empty_week",
-      "community_name": "scheduler.js"
+      "community_name": "scheduler.js",
+      "id": "src_lib_scheduler_empty_week"
     },
     {
       "label": "cloneSchedule()",
@@ -625,10 +405,10 @@
       "source_file": "src/lib/scheduler.js",
       "source_location": "L47",
       "_origin": "ast",
-      "community": 0,
+      "community": 3,
       "norm_label": "cloneschedule()",
-      "id": "src_lib_scheduler_cloneschedule",
-      "community_name": "scheduler.js"
+      "community_name": "scheduler.js",
+      "id": "src_lib_scheduler_cloneschedule"
     },
     {
       "label": "toMin()",
@@ -636,10 +416,10 @@
       "source_file": "src/lib/scheduler.js",
       "source_location": "L57",
       "_origin": "ast",
-      "community": 3,
+      "community": 1,
       "norm_label": "tomin()",
-      "id": "src_lib_scheduler_tomin",
-      "community_name": "ScheduleView.jsx"
+      "community_name": "ScheduleView.jsx",
+      "id": "src_lib_scheduler_tomin"
     },
     {
       "label": "minToHHMM()",
@@ -647,10 +427,10 @@
       "source_file": "src/lib/scheduler.js",
       "source_location": "L63",
       "_origin": "ast",
-      "community": 3,
+      "community": 1,
       "norm_label": "mintohhmm()",
-      "id": "src_lib_scheduler_mintohhmm",
-      "community_name": "ScheduleView.jsx"
+      "community_name": "ScheduleView.jsx",
+      "id": "src_lib_scheduler_mintohhmm"
     },
     {
       "label": "isWeekend()",
@@ -658,10 +438,10 @@
       "source_file": "src/lib/scheduler.js",
       "source_location": "L69",
       "_origin": "ast",
-      "community": 3,
+      "community": 1,
       "norm_label": "isweekend()",
-      "id": "src_lib_scheduler_isweekend",
-      "community_name": "ScheduleView.jsx"
+      "community_name": "ScheduleView.jsx",
+      "id": "src_lib_scheduler_isweekend"
     },
     {
       "label": "isSplitOnly()",
@@ -669,10 +449,10 @@
       "source_file": "src/lib/scheduler.js",
       "source_location": "L71",
       "_origin": "ast",
-      "community": 3,
+      "community": 1,
       "norm_label": "issplitonly()",
-      "id": "src_lib_scheduler_issplitonly",
-      "community_name": "ScheduleView.jsx"
+      "community_name": "ScheduleView.jsx",
+      "id": "src_lib_scheduler_issplitonly"
     },
     {
       "label": "storeWindow()",
@@ -680,10 +460,10 @@
       "source_file": "src/lib/scheduler.js",
       "source_location": "L79",
       "_origin": "ast",
-      "community": 3,
+      "community": 1,
       "norm_label": "storewindow()",
-      "id": "src_lib_scheduler_storewindow",
-      "community_name": "ScheduleView.jsx"
+      "community_name": "ScheduleView.jsx",
+      "id": "src_lib_scheduler_storewindow"
     },
     {
       "label": "defaultSplitMin()",
@@ -691,10 +471,10 @@
       "source_file": "src/lib/scheduler.js",
       "source_location": "L88",
       "_origin": "ast",
-      "community": 3,
+      "community": 1,
       "norm_label": "defaultsplitmin()",
-      "id": "src_lib_scheduler_defaultsplitmin",
-      "community_name": "ScheduleView.jsx"
+      "community_name": "ScheduleView.jsx",
+      "id": "src_lib_scheduler_defaultsplitmin"
     },
     {
       "label": "splitMinFor()",
@@ -702,10 +482,10 @@
       "source_file": "src/lib/scheduler.js",
       "source_location": "L98",
       "_origin": "ast",
-      "community": 3,
+      "community": 1,
       "norm_label": "splitminfor()",
-      "id": "src_lib_scheduler_splitminfor",
-      "community_name": "ScheduleView.jsx"
+      "community_name": "ScheduleView.jsx",
+      "id": "src_lib_scheduler_splitminfor"
     },
     {
       "label": "shiftWindow()",
@@ -713,10 +493,10 @@
       "source_file": "src/lib/scheduler.js",
       "source_location": "L110",
       "_origin": "ast",
-      "community": 3,
+      "community": 1,
       "norm_label": "shiftwindow()",
-      "id": "src_lib_scheduler_shiftwindow",
-      "community_name": "ScheduleView.jsx"
+      "community_name": "ScheduleView.jsx",
+      "id": "src_lib_scheduler_shiftwindow"
     },
     {
       "label": "windowsOverlap()",
@@ -724,10 +504,10 @@
       "source_file": "src/lib/scheduler.js",
       "source_location": "L117",
       "_origin": "ast",
-      "community": 0,
+      "community": 3,
       "norm_label": "windowsoverlap()",
-      "id": "src_lib_scheduler_windowsoverlap",
-      "community_name": "scheduler.js"
+      "community_name": "scheduler.js",
+      "id": "src_lib_scheduler_windowsoverlap"
     },
     {
       "label": "dayIntervals()",
@@ -735,10 +515,10 @@
       "source_file": "src/lib/scheduler.js",
       "source_location": "L123",
       "_origin": "ast",
-      "community": 0,
+      "community": 3,
       "norm_label": "dayintervals()",
-      "id": "src_lib_scheduler_dayintervals",
-      "community_name": "scheduler.js"
+      "community_name": "scheduler.js",
+      "id": "src_lib_scheduler_dayintervals"
     },
     {
       "label": "workerHours()",
@@ -748,8 +528,8 @@
       "_origin": "ast",
       "community": 3,
       "norm_label": "workerhours()",
-      "id": "src_lib_scheduler_workerhours",
-      "community_name": "ScheduleView.jsx"
+      "community_name": "ScheduleView.jsx",
+      "id": "src_lib_scheduler_workerhours"
     },
     {
       "label": "worksOn()",
@@ -757,10 +537,10 @@
       "source_file": "src/lib/scheduler.js",
       "source_location": "L152",
       "_origin": "ast",
-      "community": 0,
+      "community": 2,
       "norm_label": "workson()",
-      "id": "src_lib_scheduler_workson",
-      "community_name": "scheduler.js"
+      "community_name": "scheduler.js",
+      "id": "src_lib_scheduler_workson"
     },
     {
       "label": "worksFull()",
@@ -768,10 +548,10 @@
       "source_file": "src/lib/scheduler.js",
       "source_location": "L158",
       "_origin": "ast",
-      "community": 0,
+      "community": 2,
       "norm_label": "worksfull()",
-      "id": "src_lib_scheduler_worksfull",
-      "community_name": "scheduler.js"
+      "community_name": "scheduler.js",
+      "id": "src_lib_scheduler_worksfull"
     },
     {
       "label": "daysWorked()",
@@ -779,10 +559,10 @@
       "source_file": "src/lib/scheduler.js",
       "source_location": "L163",
       "_origin": "ast",
-      "community": 0,
+      "community": 2,
       "norm_label": "daysworked()",
-      "id": "src_lib_scheduler_daysworked",
-      "community_name": "scheduler.js"
+      "community_name": "scheduler.js",
+      "id": "src_lib_scheduler_daysworked"
     },
     {
       "label": "halvesWorked()",
@@ -790,10 +570,10 @@
       "source_file": "src/lib/scheduler.js",
       "source_location": "L169",
       "_origin": "ast",
-      "community": 0,
+      "community": 2,
       "norm_label": "halvesworked()",
-      "id": "src_lib_scheduler_halvesworked",
-      "community_name": "scheduler.js"
+      "community_name": "scheduler.js",
+      "id": "src_lib_scheduler_halvesworked"
     },
     {
       "label": "weekWorkload()",
@@ -801,10 +581,10 @@
       "source_file": "src/lib/scheduler.js",
       "source_location": "L182",
       "_origin": "ast",
-      "community": 0,
+      "community": 1,
       "norm_label": "weekworkload()",
-      "id": "src_lib_scheduler_weekworkload",
-      "community_name": "scheduler.js"
+      "community_name": "scheduler.js",
+      "id": "src_lib_scheduler_weekworkload"
     },
     {
       "label": "maxWorkdays()",
@@ -812,10 +592,10 @@
       "source_file": "src/lib/scheduler.js",
       "source_location": "L193",
       "_origin": "ast",
-      "community": 3,
+      "community": 1,
       "norm_label": "maxworkdays()",
-      "id": "src_lib_scheduler_maxworkdays",
-      "community_name": "ScheduleView.jsx"
+      "community_name": "ScheduleView.jsx",
+      "id": "src_lib_scheduler_maxworkdays"
     },
     {
       "label": "weekLoadFromSchedule()",
@@ -823,10 +603,10 @@
       "source_file": "src/lib/scheduler.js",
       "source_location": "L202",
       "_origin": "ast",
-      "community": 0,
+      "community": 3,
       "norm_label": "weekloadfromschedule()",
-      "id": "src_lib_scheduler_weekloadfromschedule",
-      "community_name": "scheduler.js"
+      "community_name": "scheduler.js",
+      "id": "src_lib_scheduler_weekloadfromschedule"
     },
     {
       "label": "streakBefore()",
@@ -834,10 +614,10 @@
       "source_file": "src/lib/scheduler.js",
       "source_location": "L218",
       "_origin": "ast",
-      "community": 0,
+      "community": 2,
       "norm_label": "streakbefore()",
-      "id": "src_lib_scheduler_streakbefore",
-      "community_name": "scheduler.js"
+      "community_name": "scheduler.js",
+      "id": "src_lib_scheduler_streakbefore"
     },
     {
       "label": "isMain()",
@@ -845,10 +625,10 @@
       "source_file": "src/lib/scheduler.js",
       "source_location": "L233",
       "_origin": "ast",
-      "community": 0,
+      "community": 2,
       "norm_label": "ismain()",
-      "id": "src_lib_scheduler_ismain",
-      "community_name": "scheduler.js"
+      "community_name": "scheduler.js",
+      "id": "src_lib_scheduler_ismain"
     },
     {
       "label": "isLinked()",
@@ -856,10 +636,10 @@
       "source_file": "src/lib/scheduler.js",
       "source_location": "L237",
       "_origin": "ast",
-      "community": 0,
+      "community": 3,
       "norm_label": "islinked()",
-      "id": "src_lib_scheduler_islinked",
-      "community_name": "scheduler.js"
+      "community_name": "scheduler.js",
+      "id": "src_lib_scheduler_islinked"
     },
     {
       "label": "linkRank()",
@@ -867,10 +647,10 @@
       "source_file": "src/lib/scheduler.js",
       "source_location": "L242",
       "_origin": "ast",
-      "community": 0,
+      "community": 2,
       "norm_label": "linkrank()",
-      "id": "src_lib_scheduler_linkrank",
-      "community_name": "scheduler.js"
+      "community_name": "scheduler.js",
+      "id": "src_lib_scheduler_linkrank"
     },
     {
       "label": "onLeave()",
@@ -878,10 +658,10 @@
       "source_file": "src/lib/scheduler.js",
       "source_location": "L247",
       "_origin": "ast",
-      "community": 0,
+      "community": 3,
       "norm_label": "onleave()",
-      "id": "src_lib_scheduler_onleave",
-      "community_name": "scheduler.js"
+      "community_name": "scheduler.js",
+      "id": "src_lib_scheduler_onleave"
     },
     {
       "label": "lockAt()",
@@ -889,10 +669,10 @@
       "source_file": "src/lib/scheduler.js",
       "source_location": "L251",
       "_origin": "ast",
-      "community": 0,
+      "community": 2,
       "norm_label": "lockat()",
-      "id": "src_lib_scheduler_lockat",
-      "community_name": "scheduler.js"
+      "community_name": "scheduler.js",
+      "id": "src_lib_scheduler_lockat"
     },
     {
       "label": "offDayHistory()",
@@ -900,10 +680,10 @@
       "source_file": "src/lib/scheduler.js",
       "source_location": "L262",
       "_origin": "ast",
-      "community": 0,
+      "community": 2,
       "norm_label": "offdayhistory()",
-      "id": "src_lib_scheduler_offdayhistory",
-      "community_name": "scheduler.js"
+      "community_name": "scheduler.js",
+      "id": "src_lib_scheduler_offdayhistory"
     },
     {
       "label": "generateSchedule()",
@@ -911,10 +691,10 @@
       "source_file": "src/lib/scheduler.js",
       "source_location": "L287",
       "_origin": "ast",
-      "community": 0,
+      "community": 2,
       "norm_label": "generateschedule()",
-      "id": "src_lib_scheduler_generateschedule",
-      "community_name": "scheduler.js"
+      "community_name": "scheduler.js",
+      "id": "src_lib_scheduler_generateschedule"
     },
     {
       "label": "computeViolations()",
@@ -922,10 +702,10 @@
       "source_file": "src/lib/scheduler.js",
       "source_location": "L568",
       "_origin": "ast",
-      "community": 0,
+      "community": 3,
       "norm_label": "computeviolations()",
-      "id": "src_lib_scheduler_computeviolations",
-      "community_name": "scheduler.js"
+      "community_name": "scheduler.js",
+      "id": "src_lib_scheduler_computeviolations"
     },
     {
       "label": "violationKey()",
@@ -933,10 +713,10 @@
       "source_file": "src/lib/scheduler.js",
       "source_location": "L639",
       "_origin": "ast",
-      "community": 0,
+      "community": 5,
       "norm_label": "violationkey()",
-      "id": "src_lib_scheduler_violationkey",
-      "community_name": "scheduler.js"
+      "community_name": "scheduler.js",
+      "id": "src_lib_scheduler_violationkey"
     },
     {
       "label": "violationMessage()",
@@ -944,10 +724,10 @@
       "source_file": "src/lib/scheduler.js",
       "source_location": "L658",
       "_origin": "ast",
-      "community": 1,
+      "community": 5,
       "norm_label": "violationmessage()",
-      "id": "src_lib_scheduler_violationmessage",
-      "community_name": "App.jsx"
+      "community_name": "App.jsx",
+      "id": "src_lib_scheduler_violationmessage"
     },
     {
       "label": "computeGaps()",
@@ -955,10 +735,10 @@
       "source_file": "src/lib/scheduler.js",
       "source_location": "L680",
       "_origin": "ast",
-      "community": 3,
+      "community": 1,
       "norm_label": "computegaps()",
-      "id": "src_lib_scheduler_computegaps",
-      "community_name": "ScheduleView.jsx"
+      "community_name": "ScheduleView.jsx",
+      "id": "src_lib_scheduler_computegaps"
     },
     {
       "label": "workerAtHalf()",
@@ -966,10 +746,10 @@
       "source_file": "src/lib/scheduler.js",
       "source_location": "L695",
       "_origin": "ast",
-      "community": 4,
+      "community": 1,
       "norm_label": "workerathalf()",
-      "id": "src_lib_scheduler_workerathalf",
-      "community_name": "Overlays.jsx"
+      "community_name": "Overlays.jsx",
+      "id": "src_lib_scheduler_workerathalf"
     },
     {
       "label": "findCoverCandidates()",
@@ -977,10 +757,10 @@
       "source_file": "src/lib/scheduler.js",
       "source_location": "L713",
       "_origin": "ast",
-      "community": 0,
+      "community": 3,
       "norm_label": "findcovercandidates()",
-      "id": "src_lib_scheduler_findcovercandidates",
-      "community_name": "scheduler.js"
+      "community_name": "scheduler.js",
+      "id": "src_lib_scheduler_findcovercandidates"
     },
     {
       "label": "findChainSwaps()",
@@ -988,10 +768,10 @@
       "source_file": "src/lib/scheduler.js",
       "source_location": "L804",
       "_origin": "ast",
-      "community": 0,
+      "community": 3,
       "norm_label": "findchainswaps()",
-      "id": "src_lib_scheduler_findchainswaps",
-      "community_name": "scheduler.js"
+      "community_name": "scheduler.js",
+      "id": "src_lib_scheduler_findchainswaps"
     },
     {
       "label": "fmtTime()",
@@ -999,10 +779,10 @@
       "source_file": "src/lib/scheduler.js",
       "source_location": "L886",
       "_origin": "ast",
-      "community": 3,
+      "community": 1,
       "norm_label": "fmttime()",
-      "id": "src_lib_scheduler_fmttime",
-      "community_name": "ScheduleView.jsx"
+      "community_name": "ScheduleView.jsx",
+      "id": "src_lib_scheduler_fmttime"
     },
     {
       "label": "fmtMin()",
@@ -1010,10 +790,10 @@
       "source_file": "src/lib/scheduler.js",
       "source_location": "L891",
       "_origin": "ast",
-      "community": 3,
+      "community": 1,
       "norm_label": "fmtmin()",
-      "id": "src_lib_scheduler_fmtmin",
-      "community_name": "ScheduleView.jsx"
+      "community_name": "ScheduleView.jsx",
+      "id": "src_lib_scheduler_fmtmin"
     },
     {
       "label": "shiftTimeLabel()",
@@ -1021,10 +801,10 @@
       "source_file": "src/lib/scheduler.js",
       "source_location": "L901",
       "_origin": "ast",
-      "community": 3,
+      "community": 1,
       "norm_label": "shifttimelabel()",
-      "id": "src_lib_scheduler_shifttimelabel",
-      "community_name": "ScheduleView.jsx"
+      "community_name": "ScheduleView.jsx",
+      "id": "src_lib_scheduler_shifttimelabel"
     },
     {
       "label": "halfLabel()",
@@ -1032,10 +812,10 @@
       "source_file": "src/lib/scheduler.js",
       "source_location": "L907",
       "_origin": "ast",
-      "community": 3,
+      "community": 1,
       "norm_label": "halflabel()",
-      "id": "src_lib_scheduler_halflabel",
-      "community_name": "ScheduleView.jsx"
+      "community_name": "ScheduleView.jsx",
+      "id": "src_lib_scheduler_halflabel"
     },
     {
       "label": "toISODate()",
@@ -1043,10 +823,10 @@
       "source_file": "src/lib/scheduler.js",
       "source_location": "L914",
       "_origin": "ast",
-      "community": 1,
+      "community": 2,
       "norm_label": "toisodate()",
-      "id": "src_lib_scheduler_toisodate",
-      "community_name": "App.jsx"
+      "community_name": "App.jsx",
+      "id": "src_lib_scheduler_toisodate"
     },
     {
       "label": "fromISODate()",
@@ -1054,10 +834,10 @@
       "source_file": "src/lib/scheduler.js",
       "source_location": "L918",
       "_origin": "ast",
-      "community": 1,
+      "community": 2,
       "norm_label": "fromisodate()",
-      "id": "src_lib_scheduler_fromisodate",
-      "community_name": "App.jsx"
+      "community_name": "App.jsx",
+      "id": "src_lib_scheduler_fromisodate"
     },
     {
       "label": "mondayOf()",
@@ -1065,10 +845,10 @@
       "source_file": "src/lib/scheduler.js",
       "source_location": "L922",
       "_origin": "ast",
-      "community": 1,
+      "community": 2,
       "norm_label": "mondayof()",
-      "id": "src_lib_scheduler_mondayof",
-      "community_name": "App.jsx"
+      "community_name": "App.jsx",
+      "id": "src_lib_scheduler_mondayof"
     },
     {
       "label": "isMonday()",
@@ -1076,10 +856,10 @@
       "source_file": "src/lib/scheduler.js",
       "source_location": "L928",
       "_origin": "ast",
-      "community": 1,
+      "community": 2,
       "norm_label": "ismonday()",
-      "id": "src_lib_scheduler_ismonday",
-      "community_name": "App.jsx"
+      "community_name": "App.jsx",
+      "id": "src_lib_scheduler_ismonday"
     },
     {
       "label": "nextMonday()",
@@ -1087,10 +867,10 @@
       "source_file": "src/lib/scheduler.js",
       "source_location": "L931",
       "_origin": "ast",
-      "community": 1,
+      "community": 2,
       "norm_label": "nextmonday()",
-      "id": "src_lib_scheduler_nextmonday",
-      "community_name": "App.jsx"
+      "community_name": "App.jsx",
+      "id": "src_lib_scheduler_nextmonday"
     },
     {
       "label": "addDays()",
@@ -1098,10 +878,10 @@
       "source_file": "src/lib/scheduler.js",
       "source_location": "L937",
       "_origin": "ast",
-      "community": 1,
+      "community": 2,
       "norm_label": "adddays()",
-      "id": "src_lib_scheduler_adddays",
-      "community_name": "App.jsx"
+      "community_name": "App.jsx",
+      "id": "src_lib_scheduler_adddays"
     },
     {
       "label": "dayLabels()",
@@ -1109,10 +889,10 @@
       "source_file": "src/lib/scheduler.js",
       "source_location": "L942",
       "_origin": "ast",
-      "community": 1,
+      "community": 2,
       "norm_label": "daylabels()",
-      "id": "src_lib_scheduler_daylabels",
-      "community_name": "App.jsx"
+      "community_name": "App.jsx",
+      "id": "src_lib_scheduler_daylabels"
     },
     {
       "label": "formatWeek()",
@@ -1120,10 +900,10 @@
       "source_file": "src/lib/scheduler.js",
       "source_location": "L945",
       "_origin": "ast",
-      "community": 4,
+      "community": 6,
       "norm_label": "formatweek()",
-      "id": "src_lib_scheduler_formatweek",
-      "community_name": "Overlays.jsx"
+      "community_name": "Overlays.jsx",
+      "id": "src_lib_scheduler_formatweek"
     },
     {
       "label": "seed.js",
@@ -1131,10 +911,10 @@
       "source_file": "src/lib/seed.js",
       "source_location": "L1",
       "_origin": "ast",
-      "community": 1,
+      "community": 8,
       "norm_label": "seed.js",
-      "id": "src_lib_seed",
-      "community_name": "App.jsx"
+      "community_name": "App.jsx",
+      "id": "src_lib_seed"
     },
     {
       "label": "STORE_DEFAULTS",
@@ -1142,10 +922,10 @@
       "source_file": "src/lib/seed.js",
       "source_location": "L7",
       "_origin": "ast",
-      "community": 1,
+      "community": 8,
       "norm_label": "store_defaults",
-      "id": "src_lib_seed_store_defaults",
-      "community_name": "App.jsx"
+      "community_name": "App.jsx",
+      "id": "src_lib_seed_store_defaults"
     },
     {
       "label": "seedStores()",
@@ -1153,10 +933,10 @@
       "source_file": "src/lib/seed.js",
       "source_location": "L15",
       "_origin": "ast",
-      "community": 1,
+      "community": 8,
       "norm_label": "seedstores()",
-      "id": "src_lib_seed_seedstores",
-      "community_name": "App.jsx"
+      "community_name": "App.jsx",
+      "id": "src_lib_seed_seedstores"
     },
     {
       "label": "seedWorkers()",
@@ -1164,10 +944,10 @@
       "source_file": "src/lib/seed.js",
       "source_location": "L29",
       "_origin": "ast",
-      "community": 1,
+      "community": 8,
       "norm_label": "seedworkers()",
-      "id": "src_lib_seed_seedworkers",
-      "community_name": "App.jsx"
+      "community_name": "App.jsx",
+      "id": "src_lib_seed_seedworkers"
     },
     {
       "label": "supabase.js",
@@ -1175,10 +955,10 @@
       "source_file": "src/lib/supabase.js",
       "source_location": "L1",
       "_origin": "ast",
-      "community": 5,
+      "community": 4,
       "norm_label": "supabase.js",
-      "id": "src_lib_supabase",
-      "community_name": "supabase.js"
+      "community_name": "supabase.js",
+      "id": "src_lib_supabase"
     },
     {
       "label": "enabled",
@@ -1186,10 +966,10 @@
       "source_file": "src/lib/supabase.js",
       "source_location": "L7",
       "_origin": "ast",
-      "community": 5,
+      "community": 4,
       "norm_label": "enabled",
-      "id": "src_lib_supabase_enabled",
-      "community_name": "supabase.js"
+      "community_name": "supabase.js",
+      "id": "src_lib_supabase_enabled"
     },
     {
       "label": "getLastError()",
@@ -1197,10 +977,10 @@
       "source_file": "src/lib/supabase.js",
       "source_location": "L18",
       "_origin": "ast",
-      "community": 5,
+      "community": 4,
       "norm_label": "getlasterror()",
-      "id": "src_lib_supabase_getlasterror",
-      "community_name": "supabase.js"
+      "community_name": "supabase.js",
+      "id": "src_lib_supabase_getlasterror"
     },
     {
       "label": "diagnostics()",
@@ -1208,10 +988,10 @@
       "source_file": "src/lib/supabase.js",
       "source_location": "L21",
       "_origin": "ast",
-      "community": 5,
+      "community": 4,
       "norm_label": "diagnostics()",
-      "id": "src_lib_supabase_diagnostics",
-      "community_name": "supabase.js"
+      "community_name": "supabase.js",
+      "id": "src_lib_supabase_diagnostics"
     },
     {
       "label": "sb()",
@@ -1219,10 +999,10 @@
       "source_file": "src/lib/supabase.js",
       "source_location": "L30",
       "_origin": "ast",
-      "community": 5,
+      "community": 4,
       "norm_label": "sb()",
-      "id": "src_lib_supabase_sb",
-      "community_name": "supabase.js"
+      "community_name": "supabase.js",
+      "id": "src_lib_supabase_sb"
     },
     {
       "label": "testConnection()",
@@ -1230,10 +1010,10 @@
       "source_file": "src/lib/supabase.js",
       "source_location": "L55",
       "_origin": "ast",
-      "community": 5,
+      "community": 4,
       "norm_label": "testconnection()",
-      "id": "src_lib_supabase_testconnection",
-      "community_name": "supabase.js"
+      "community_name": "supabase.js",
+      "id": "src_lib_supabase_testconnection"
     },
     {
       "label": "loadSetup()",
@@ -1241,10 +1021,10 @@
       "source_file": "src/lib/supabase.js",
       "source_location": "L67",
       "_origin": "ast",
-      "community": 5,
+      "community": 4,
       "norm_label": "loadsetup()",
-      "id": "src_lib_supabase_loadsetup",
-      "community_name": "supabase.js"
+      "community_name": "supabase.js",
+      "id": "src_lib_supabase_loadsetup"
     },
     {
       "label": "saveSetup()",
@@ -1252,10 +1032,10 @@
       "source_file": "src/lib/supabase.js",
       "source_location": "L87",
       "_origin": "ast",
-      "community": 5,
+      "community": 4,
       "norm_label": "savesetup()",
-      "id": "src_lib_supabase_savesetup",
-      "community_name": "supabase.js"
+      "community_name": "supabase.js",
+      "id": "src_lib_supabase_savesetup"
     },
     {
       "label": "listWeeks()",
@@ -1263,10 +1043,10 @@
       "source_file": "src/lib/supabase.js",
       "source_location": "L122",
       "_origin": "ast",
-      "community": 5,
+      "community": 4,
       "norm_label": "listweeks()",
-      "id": "src_lib_supabase_listweeks",
-      "community_name": "supabase.js"
+      "community_name": "supabase.js",
+      "id": "src_lib_supabase_listweeks"
     },
     {
       "label": "saveWeek()",
@@ -1274,10 +1054,10 @@
       "source_file": "src/lib/supabase.js",
       "source_location": "L131",
       "_origin": "ast",
-      "community": 5,
+      "community": 4,
       "norm_label": "saveweek()",
-      "id": "src_lib_supabase_saveweek",
-      "community_name": "supabase.js"
+      "community_name": "supabase.js",
+      "id": "src_lib_supabase_saveweek"
     },
     {
       "label": "pruneWeeks()",
@@ -1285,10 +1065,10 @@
       "source_file": "src/lib/supabase.js",
       "source_location": "L185",
       "_origin": "ast",
-      "community": 5,
+      "community": 4,
       "norm_label": "pruneweeks()",
-      "id": "src_lib_supabase_pruneweeks",
-      "community_name": "supabase.js"
+      "community_name": "supabase.js",
+      "id": "src_lib_supabase_pruneweeks"
     },
     {
       "label": "loadWeek()",
@@ -1296,10 +1076,10 @@
       "source_file": "src/lib/supabase.js",
       "source_location": "L197",
       "_origin": "ast",
-      "community": 5,
+      "community": 4,
       "norm_label": "loadweek()",
-      "id": "src_lib_supabase_loadweek",
-      "community_name": "supabase.js"
+      "community_name": "supabase.js",
+      "id": "src_lib_supabase_loadweek"
     },
     {
       "label": "main.jsx",
@@ -1307,10 +1087,10 @@
       "source_file": "src/main.jsx",
       "source_location": "L1",
       "_origin": "ast",
-      "community": 1,
+      "community": 8,
       "norm_label": "main.jsx",
-      "id": "src_main",
-      "community_name": "App.jsx"
+      "community_name": "App.jsx",
+      "id": "src_main"
     },
     {
       "label": "supabase-setup.sql",
@@ -1318,10 +1098,10 @@
       "source_file": "supabase-setup.sql",
       "source_location": null,
       "_origin": "ast",
-      "community": 6,
+      "community": 9,
       "norm_label": "supabase-setup.sql",
-      "id": "supabase_setup",
-      "community_name": "supabase-setup.sql"
+      "community_name": "supabase-setup.sql",
+      "id": "supabase_setup"
     },
     {
       "label": "stores",
@@ -1329,10 +1109,10 @@
       "source_file": "supabase-setup.sql",
       "source_location": "L25",
       "_origin": "ast",
-      "community": 6,
+      "community": 9,
       "norm_label": "stores",
-      "id": "supabase_setup_stores",
-      "community_name": "supabase-setup.sql"
+      "community_name": "supabase-setup.sql",
+      "id": "supabase_setup_stores"
     },
     {
       "label": "workers",
@@ -1340,10 +1120,10 @@
       "source_file": "supabase-setup.sql",
       "source_location": "L45",
       "_origin": "ast",
-      "community": 6,
+      "community": 9,
       "norm_label": "workers",
-      "id": "supabase_setup_workers",
-      "community_name": "supabase-setup.sql"
+      "community_name": "supabase-setup.sql",
+      "id": "supabase_setup_workers"
     },
     {
       "label": "weeks",
@@ -1351,10 +1131,10 @@
       "source_file": "supabase-setup.sql",
       "source_location": "L68",
       "_origin": "ast",
-      "community": 6,
+      "community": 9,
       "norm_label": "weeks",
-      "id": "supabase_setup_weeks",
-      "community_name": "supabase-setup.sql"
+      "community_name": "supabase-setup.sql",
+      "id": "supabase_setup_weeks"
     },
     {
       "label": "leaves",
@@ -1362,10 +1142,10 @@
       "source_file": "supabase-setup.sql",
       "source_location": "L80",
       "_origin": "ast",
-      "community": 6,
+      "community": 9,
       "norm_label": "leaves",
-      "id": "supabase_setup_leaves",
-      "community_name": "supabase-setup.sql"
+      "community_name": "supabase-setup.sql",
+      "id": "supabase_setup_leaves"
     },
     {
       "label": "locks",
@@ -1373,10 +1153,10 @@
       "source_file": "supabase-setup.sql",
       "source_location": "L89",
       "_origin": "ast",
-      "community": 6,
+      "community": 9,
       "norm_label": "locks",
-      "id": "supabase_setup_locks",
-      "community_name": "supabase-setup.sql"
+      "community_name": "supabase-setup.sql",
+      "id": "supabase_setup_locks"
     },
     {
       "label": "schedule",
@@ -1384,10 +1164,10 @@
       "source_file": "supabase-setup.sql",
       "source_location": "L100",
       "_origin": "ast",
-      "community": 6,
+      "community": 9,
       "norm_label": "schedule",
-      "id": "supabase_setup_schedule",
-      "community_name": "supabase-setup.sql"
+      "community_name": "supabase-setup.sql",
+      "id": "supabase_setup_schedule"
     },
     {
       "label": "scheduler.test.js",
@@ -1395,10 +1175,10 @@
       "source_file": "tests/scheduler.test.js",
       "source_location": "L1",
       "_origin": "ast",
-      "community": 0,
+      "community": 3,
       "norm_label": "scheduler.test.js",
-      "id": "tests_scheduler_test",
-      "community_name": "scheduler.js"
+      "community_name": "scheduler.js",
+      "id": "tests_scheduler_test"
     },
     {
       "label": "check()",
@@ -1406,10 +1186,10 @@
       "source_file": "tests/scheduler.test.js",
       "source_location": "L26",
       "_origin": "ast",
-      "community": 0,
+      "community": 3,
       "norm_label": "check()",
-      "id": "tests_scheduler_test_check",
-      "community_name": "scheduler.js"
+      "community_name": "scheduler.js",
+      "id": "tests_scheduler_test_check"
     },
     {
       "label": "setup()",
@@ -1417,10 +1197,10 @@
       "source_file": "tests/scheduler.test.js",
       "source_location": "L33",
       "_origin": "ast",
-      "community": 0,
+      "community": 3,
       "norm_label": "setup()",
-      "id": "tests_scheduler_test_setup",
-      "community_name": "scheduler.js"
+      "community_name": "scheduler.js",
+      "id": "tests_scheduler_test_setup"
     },
     {
       "label": "vite.config.js",
@@ -1428,207 +1208,243 @@
       "source_file": "vite.config.js",
       "source_location": "L1",
       "_origin": "ast",
-      "community": 7,
+      "community": 10,
       "norm_label": "vite.config.js",
-      "id": "vite_config",
-      "community_name": "vite.config.js"
+      "community_name": "vite.config.js",
+      "id": "vite_config"
+    },
+    {
+      "label": "package.json",
+      "file_type": "code",
+      "source_file": "package.json",
+      "source_location": "L1",
+      "_origin": "ast",
+      "community": 0,
+      "norm_label": "package.json",
+      "id": "package"
+    },
+    {
+      "label": "name",
+      "file_type": "code",
+      "source_file": "package.json",
+      "source_location": "L2",
+      "_origin": "ast",
+      "community": 0,
+      "norm_label": "name",
+      "id": "package_name"
+    },
+    {
+      "label": "private",
+      "file_type": "code",
+      "source_file": "package.json",
+      "source_location": "L3",
+      "_origin": "ast",
+      "community": 0,
+      "norm_label": "private",
+      "id": "package_private"
+    },
+    {
+      "label": "version",
+      "file_type": "code",
+      "source_file": "package.json",
+      "source_location": "L4",
+      "_origin": "ast",
+      "community": 0,
+      "norm_label": "version",
+      "id": "package_version"
+    },
+    {
+      "label": "type",
+      "file_type": "code",
+      "source_file": "package.json",
+      "source_location": "L5",
+      "_origin": "ast",
+      "community": 0,
+      "norm_label": "type",
+      "id": "package_type"
+    },
+    {
+      "label": "scripts",
+      "file_type": "code",
+      "source_file": "package.json",
+      "source_location": "L6",
+      "_origin": "ast",
+      "community": 0,
+      "norm_label": "scripts",
+      "id": "package_scripts"
+    },
+    {
+      "label": "dev",
+      "file_type": "code",
+      "source_file": "package.json",
+      "source_location": "L7",
+      "_origin": "ast",
+      "community": 0,
+      "norm_label": "dev",
+      "id": "package_scripts_dev"
+    },
+    {
+      "label": "build",
+      "file_type": "code",
+      "source_file": "package.json",
+      "source_location": "L8",
+      "_origin": "ast",
+      "community": 0,
+      "norm_label": "build",
+      "id": "package_scripts_build"
+    },
+    {
+      "label": "preview",
+      "file_type": "code",
+      "source_file": "package.json",
+      "source_location": "L9",
+      "_origin": "ast",
+      "community": 0,
+      "norm_label": "preview",
+      "id": "package_scripts_preview"
+    },
+    {
+      "label": "test",
+      "file_type": "code",
+      "source_file": "package.json",
+      "source_location": "L10",
+      "_origin": "ast",
+      "community": 0,
+      "norm_label": "test",
+      "id": "package_scripts_test"
+    },
+    {
+      "label": "prepare",
+      "file_type": "code",
+      "source_file": "package.json",
+      "source_location": "L11",
+      "_origin": "ast",
+      "community": 0,
+      "norm_label": "prepare",
+      "id": "package_scripts_prepare"
+    },
+    {
+      "label": "dependencies",
+      "file_type": "code",
+      "source_file": "package.json",
+      "source_location": "L13",
+      "_origin": "ast",
+      "community": 0,
+      "norm_label": "dependencies",
+      "id": "package_dependencies"
+    },
+    {
+      "label": "react",
+      "file_type": "code",
+      "source_file": "package.json",
+      "source_location": "L14",
+      "_origin": "ast",
+      "community": 0,
+      "norm_label": "react",
+      "id": "package_dependencies_react"
+    },
+    {
+      "label": "react",
+      "file_type": "concept",
+      "source_file": "package.json",
+      "source_location": "L14",
+      "_origin": "ast",
+      "community": 0,
+      "norm_label": "react",
+      "id": "react"
+    },
+    {
+      "label": "react-dom",
+      "file_type": "code",
+      "source_file": "package.json",
+      "source_location": "L15",
+      "_origin": "ast",
+      "community": 0,
+      "norm_label": "react-dom",
+      "id": "package_dependencies_react_dom"
+    },
+    {
+      "label": "react-dom",
+      "file_type": "concept",
+      "source_file": "package.json",
+      "source_location": "L15",
+      "_origin": "ast",
+      "community": 0,
+      "norm_label": "react-dom",
+      "id": "react_dom"
+    },
+    {
+      "label": "devDependencies",
+      "file_type": "code",
+      "source_file": "package.json",
+      "source_location": "L17",
+      "_origin": "ast",
+      "community": 0,
+      "norm_label": "devdependencies",
+      "id": "package_devdependencies"
+    },
+    {
+      "label": "@vitejs/plugin-react",
+      "file_type": "code",
+      "source_file": "package.json",
+      "source_location": "L18",
+      "_origin": "ast",
+      "community": 0,
+      "norm_label": "@vitejs/plugin-react",
+      "id": "package_devdependencies_vitejs_plugin_react"
+    },
+    {
+      "label": "@vitejs/plugin-react",
+      "file_type": "concept",
+      "source_file": "package.json",
+      "source_location": "L18",
+      "_origin": "ast",
+      "community": 0,
+      "norm_label": "@vitejs/plugin-react",
+      "id": "vitejs_plugin_react"
+    },
+    {
+      "label": "husky",
+      "file_type": "code",
+      "source_file": "package.json",
+      "source_location": "L19",
+      "_origin": "ast",
+      "community": 0,
+      "norm_label": "husky",
+      "id": "package_devdependencies_husky"
+    },
+    {
+      "label": "husky",
+      "file_type": "concept",
+      "source_file": "package.json",
+      "source_location": "L19",
+      "_origin": "ast",
+      "community": 0,
+      "norm_label": "husky",
+      "id": "husky"
+    },
+    {
+      "label": "vite",
+      "file_type": "code",
+      "source_file": "package.json",
+      "source_location": "L20",
+      "_origin": "ast",
+      "community": 0,
+      "norm_label": "vite",
+      "id": "package_devdependencies_vite"
+    },
+    {
+      "label": "vite",
+      "file_type": "concept",
+      "source_file": "package.json",
+      "source_location": "L20",
+      "_origin": "ast",
+      "community": 0,
+      "norm_label": "vite",
+      "id": "vite"
     }
   ],
   "links": [
-    {
-      "relation": "contains",
-      "confidence": "EXTRACTED",
-      "source_file": "package.json",
-      "source_location": "L12",
-      "weight": 1.0,
-      "confidence_score": 1.0,
-      "source": "package",
-      "target": "package_dependencies"
-    },
-    {
-      "relation": "contains",
-      "confidence": "EXTRACTED",
-      "source_file": "package.json",
-      "source_location": "L16",
-      "weight": 1.0,
-      "confidence_score": 1.0,
-      "source": "package",
-      "target": "package_devdependencies"
-    },
-    {
-      "relation": "contains",
-      "confidence": "EXTRACTED",
-      "source_file": "package.json",
-      "source_location": "L2",
-      "weight": 1.0,
-      "confidence_score": 1.0,
-      "source": "package",
-      "target": "package_name"
-    },
-    {
-      "relation": "contains",
-      "confidence": "EXTRACTED",
-      "source_file": "package.json",
-      "source_location": "L3",
-      "weight": 1.0,
-      "confidence_score": 1.0,
-      "source": "package",
-      "target": "package_private"
-    },
-    {
-      "relation": "contains",
-      "confidence": "EXTRACTED",
-      "source_file": "package.json",
-      "source_location": "L6",
-      "weight": 1.0,
-      "confidence_score": 1.0,
-      "source": "package",
-      "target": "package_scripts"
-    },
-    {
-      "relation": "contains",
-      "confidence": "EXTRACTED",
-      "source_file": "package.json",
-      "source_location": "L5",
-      "weight": 1.0,
-      "confidence_score": 1.0,
-      "source": "package",
-      "target": "package_type"
-    },
-    {
-      "relation": "contains",
-      "confidence": "EXTRACTED",
-      "source_file": "package.json",
-      "source_location": "L4",
-      "weight": 1.0,
-      "confidence_score": 1.0,
-      "source": "package",
-      "target": "package_version"
-    },
-    {
-      "relation": "contains",
-      "confidence": "EXTRACTED",
-      "source_file": "package.json",
-      "source_location": "L8",
-      "weight": 1.0,
-      "confidence_score": 1.0,
-      "source": "package_scripts",
-      "target": "package_scripts_build"
-    },
-    {
-      "relation": "contains",
-      "confidence": "EXTRACTED",
-      "source_file": "package.json",
-      "source_location": "L7",
-      "weight": 1.0,
-      "confidence_score": 1.0,
-      "source": "package_scripts",
-      "target": "package_scripts_dev"
-    },
-    {
-      "relation": "contains",
-      "confidence": "EXTRACTED",
-      "source_file": "package.json",
-      "source_location": "L9",
-      "weight": 1.0,
-      "confidence_score": 1.0,
-      "source": "package_scripts",
-      "target": "package_scripts_preview"
-    },
-    {
-      "relation": "contains",
-      "confidence": "EXTRACTED",
-      "source_file": "package.json",
-      "source_location": "L10",
-      "weight": 1.0,
-      "confidence_score": 1.0,
-      "source": "package_scripts",
-      "target": "package_scripts_test"
-    },
-    {
-      "relation": "contains",
-      "confidence": "EXTRACTED",
-      "source_file": "package.json",
-      "source_location": "L13",
-      "weight": 1.0,
-      "confidence_score": 1.0,
-      "source": "package_dependencies",
-      "target": "package_dependencies_react"
-    },
-    {
-      "relation": "contains",
-      "confidence": "EXTRACTED",
-      "source_file": "package.json",
-      "source_location": "L14",
-      "weight": 1.0,
-      "confidence_score": 1.0,
-      "source": "package_dependencies",
-      "target": "package_dependencies_react_dom"
-    },
-    {
-      "relation": "imports",
-      "confidence": "EXTRACTED",
-      "source_file": "package.json",
-      "source_location": "L13",
-      "weight": 1.0,
-      "context": "import",
-      "confidence_score": 1.0,
-      "source": "package_dependencies_react",
-      "target": "react"
-    },
-    {
-      "relation": "imports",
-      "confidence": "EXTRACTED",
-      "source_file": "package.json",
-      "source_location": "L14",
-      "weight": 1.0,
-      "context": "import",
-      "confidence_score": 1.0,
-      "source": "package_dependencies_react_dom",
-      "target": "react_dom"
-    },
-    {
-      "relation": "contains",
-      "confidence": "EXTRACTED",
-      "source_file": "package.json",
-      "source_location": "L18",
-      "weight": 1.0,
-      "confidence_score": 1.0,
-      "source": "package_devdependencies",
-      "target": "package_devdependencies_vite"
-    },
-    {
-      "relation": "contains",
-      "confidence": "EXTRACTED",
-      "source_file": "package.json",
-      "source_location": "L17",
-      "weight": 1.0,
-      "confidence_score": 1.0,
-      "source": "package_devdependencies",
-      "target": "package_devdependencies_vitejs_plugin_react"
-    },
-    {
-      "relation": "imports",
-      "confidence": "EXTRACTED",
-      "source_file": "package.json",
-      "source_location": "L17",
-      "weight": 1.0,
-      "context": "import",
-      "confidence_score": 1.0,
-      "source": "package_devdependencies_vitejs_plugin_react",
-      "target": "vitejs_plugin_react"
-    },
-    {
-      "relation": "imports",
-      "confidence": "EXTRACTED",
-      "source_file": "package.json",
-      "source_location": "L18",
-      "weight": 1.0,
-      "context": "import",
-      "confidence_score": 1.0,
-      "source": "package_devdependencies_vite",
-      "target": "vite"
-    },
     {
       "relation": "contains",
       "confidence": "EXTRACTED",
@@ -4898,8 +4714,233 @@
       "confidence_score": 1.0,
       "source": "tests_scheduler_test",
       "target": "tests_scheduler_test_setup"
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "package.json",
+      "source_location": "L13",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "package",
+      "target": "package_dependencies"
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "package.json",
+      "source_location": "L17",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "package",
+      "target": "package_devdependencies"
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "package.json",
+      "source_location": "L2",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "package",
+      "target": "package_name"
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "package.json",
+      "source_location": "L3",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "package",
+      "target": "package_private"
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "package.json",
+      "source_location": "L6",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "package",
+      "target": "package_scripts"
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "package.json",
+      "source_location": "L5",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "package",
+      "target": "package_type"
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "package.json",
+      "source_location": "L4",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "package",
+      "target": "package_version"
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "package.json",
+      "source_location": "L8",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "package_scripts",
+      "target": "package_scripts_build"
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "package.json",
+      "source_location": "L7",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "package_scripts",
+      "target": "package_scripts_dev"
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "package.json",
+      "source_location": "L11",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "package_scripts",
+      "target": "package_scripts_prepare"
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "package.json",
+      "source_location": "L9",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "package_scripts",
+      "target": "package_scripts_preview"
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "package.json",
+      "source_location": "L10",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "package_scripts",
+      "target": "package_scripts_test"
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "package.json",
+      "source_location": "L14",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "package_dependencies",
+      "target": "package_dependencies_react"
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "package.json",
+      "source_location": "L15",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "package_dependencies",
+      "target": "package_dependencies_react_dom"
+    },
+    {
+      "relation": "imports",
+      "confidence": "EXTRACTED",
+      "source_file": "package.json",
+      "source_location": "L14",
+      "weight": 1.0,
+      "context": "import",
+      "confidence_score": 1.0,
+      "source": "package_dependencies_react",
+      "target": "react"
+    },
+    {
+      "relation": "imports",
+      "confidence": "EXTRACTED",
+      "source_file": "package.json",
+      "source_location": "L15",
+      "weight": 1.0,
+      "context": "import",
+      "confidence_score": 1.0,
+      "source": "package_dependencies_react_dom",
+      "target": "react_dom"
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "package.json",
+      "source_location": "L19",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "package_devdependencies",
+      "target": "package_devdependencies_husky"
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "package.json",
+      "source_location": "L20",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "package_devdependencies",
+      "target": "package_devdependencies_vite"
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "package.json",
+      "source_location": "L18",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "package_devdependencies",
+      "target": "package_devdependencies_vitejs_plugin_react"
+    },
+    {
+      "relation": "imports",
+      "confidence": "EXTRACTED",
+      "source_file": "package.json",
+      "source_location": "L18",
+      "weight": 1.0,
+      "context": "import",
+      "confidence_score": 1.0,
+      "source": "package_devdependencies_vitejs_plugin_react",
+      "target": "vitejs_plugin_react"
+    },
+    {
+      "relation": "imports",
+      "confidence": "EXTRACTED",
+      "source_file": "package.json",
+      "source_location": "L19",
+      "weight": 1.0,
+      "context": "import",
+      "confidence_score": 1.0,
+      "source": "package_devdependencies_husky",
+      "target": "husky"
+    },
+    {
+      "relation": "imports",
+      "confidence": "EXTRACTED",
+      "source_file": "package.json",
+      "source_location": "L20",
+      "weight": 1.0,
+      "context": "import",
+      "confidence_score": 1.0,
+      "source": "package_devdependencies_vite",
+      "target": "vite"
     }
   ],
   "hyperedges": [],
-  "built_at_commit": "1a113f30356094967d6bff94d4b0e9808466c8ed"
+  "built_at_commit": "88d9e26eadd2206c2c799c9b4d31fcd9993ed45a"
 }

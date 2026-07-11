@@ -11,3 +11,5 @@ graphify-out/graph.html
 graphify-out/manifest.json
 graphify-out/.graphify_analysis.json
 graphify-out/.graphify_labels.json*
+# dated snapshot folders written by graphify --update (regenerable)
+graphify-out/20??-??-??/
