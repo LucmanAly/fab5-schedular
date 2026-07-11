@@ -76,21 +76,28 @@ create table weeks (
 
 -- Leave requests: worker is unavailable that day (P3). Stored per week so a
 -- saved week keeps its leave context (Find Cover needs schedule-off vs
--- requested-off).
+-- requested-off). start/end_time NULL = whole-day leave; set = unavailable
+-- only during that window ('HH:MM', v4.1).
 create table leaves (
   week_start date not null,
   worker_id  int  not null,
   day_index  int  not null check (day_index between 0 and 6),
+  start_time text,
+  end_time   text,
   primary key (week_start, worker_id, day_index)
 );
 
 -- Locks: the inverse of a leave — a guaranteed assignment of a worker to a
--- store on a given day (P4).
+-- store on a given day (P4). start/end_time NULL = whole day; set = the
+-- worker is guaranteed exactly that window, the rest of the store's day
+-- stays open for normal fill ('HH:MM', v4.1).
 create table locks (
   week_start date not null,
   worker_id  int  not null,
   day_index  int  not null check (day_index between 0 and 6),
   store_id   int  not null,
+  start_time text,
+  end_time   text,
   primary key (week_start, worker_id, day_index)
 );
 

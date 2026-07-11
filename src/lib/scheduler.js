@@ -244,14 +244,134 @@ export function linkRank(worker, storeId) {
   return i === -1 ? 999 : i;
 }
 
-function onLeave(leaves, workerId, dayIdx) {
-  return !!(leaves && leaves[workerId] && leaves[workerId][dayIdx]);
+// ---------- Leave / lock accessors (v4.1: optional time ranges) ----------
+// A leave cell is false | true (whole day) | { start:'HH:MM', end:'HH:MM' }.
+// A lock cell is null | storeId (whole day) | { storeId, start, end }.
+// Ranges use the same minutes-from-midnight model as store windows, including
+// past-midnight handling (end <= start rolls into the next day).
+
+/** Normalized leave: null, { full:true }, or { full:false, start, end } (minutes). */
+export function leaveAt(leaves, workerId, dayIdx) {
+  const row = leaves && leaves[workerId];
+  const v = row ? row[dayIdx] : null;
+  if (!v) return null;
+  if (v === true) return { full: true };
+  if (typeof v === 'object' && v.start && v.end) {
+    const start = toMin(v.start);
+    let end = toMin(v.end);
+    if (end <= start) end += 1440;
+    return { full: false, start, end };
+  }
+  return { full: true };
 }
 
-function lockAt(locks, workerId, dayIdx) {
+function fullLeave(leaves, workerId, dayIdx) {
+  const lv = leaveAt(leaves, workerId, dayIdx);
+  return !!(lv && lv.full);
+}
+
+/** Normalized lock: null or { storeId, start?, end? } (minutes when ranged). */
+export function lockAt(locks, workerId, dayIdx) {
   const row = locks && locks[workerId];
   const v = row ? row[dayIdx] : null;
-  return v == null ? null : v;
+  if (v == null) return null;
+  if (typeof v === 'object') {
+    const out = { storeId: v.storeId };
+    if (v.start && v.end) {
+      out.start = toMin(v.start);
+      out.end = toMin(v.end);
+      if (out.end <= out.start) out.end += 1440;
+    }
+    return out;
+  }
+  return { storeId: v };
+}
+
+/**
+ * Which half of a (possibly seeded) store day a range corresponds to:
+ * 'am' (range is a prefix ending at the changeover), 'pm' (suffix starting at
+ * it), 'full' (covers the whole window), or null (unanchored — the two-halves
+ * model can't represent a middle slice; input validation prevents this).
+ */
+export function rangeHalfFor(store, dayIdx, range, splitTimes = {}) {
+  const { open, close } = storeWindow(store, dayIdx);
+  if (range.start <= open && range.end >= close) return 'full';
+  const split = splitMinFor(store, dayIdx, splitTimes);
+  if (range.start <= open && range.end === split) return 'am';
+  if (range.start === split && range.end >= close) return 'pm';
+  return null;
+}
+
+/**
+ * Pre-generation seeding (§ time-range constraints): a time-range lock — or a
+ * range leave on a store's Main — sets that store+day's changeover to the
+ * range boundary, reusing the existing per-instance override mechanism, so
+ * the generator's two halves line up with the constraint and the remainder
+ * stays open for normal P1 fill.
+ * Returns { splitTimes, conflicts }: conflicts are P4 violations for
+ * store+days where two ranges demand different changeover points.
+ */
+export function seedSplitTimes({ stores, workers, leaves = {}, locks = {}, splitTimes = {} }) {
+  const out = { ...splitTimes };
+  const seeded = {}; // key -> { boundary, workerId } (first claim wins; mismatches conflict)
+  const conflicts = [];
+
+  const boundaryOf = (store, dayIdx, range) => {
+    const { open, close } = storeWindow(store, dayIdx);
+    if (range.start <= open && range.end >= close) return null; // whole day, nothing to seed
+    if (range.start <= open && range.end < close) return range.end; // prefix
+    if (range.start > open && range.end >= close) return range.start; // suffix
+    return undefined; // unanchored middle slice
+  };
+
+  const claim = (store, dayIdx, range, workerId, hard) => {
+    const b = boundaryOf(store, dayIdx, range);
+    if (b === null || b === undefined) return; // nothing to seed (whole-day or unanchored)
+    const key = `${store.id}-${dayIdx}`;
+    if (seeded[key] !== undefined) {
+      if (seeded[key].boundary !== b && hard) {
+        conflicts.push({
+          priority: 4,
+          type: 'lock_conflict',
+          storeId: store.id,
+          dayIdx,
+          workerId,
+          otherWorkerId: seeded[key].workerId,
+          boundaryA: seeded[key].boundary,
+          boundaryB: b,
+        });
+      }
+      return; // first claim keeps the changeover (soft claims never fight)
+    }
+    seeded[key] = { boundary: b, workerId };
+    out[key] = minToHHMM(b);
+  };
+
+  // Locks first (hard claims), then Main leaves (soft convenience claims).
+  for (const w of workers) {
+    for (let d = 0; d < 7; d++) {
+      const lk = lockAt(locks, w.id, d);
+      if (lk && lk.start != null) {
+        const st = stores.find((s) => s.id === lk.storeId);
+        if (st) claim(st, d, lk, w.id, true);
+      }
+    }
+  }
+  for (const w of workers) {
+    if (w.main_store_id == null) continue;
+    const st = stores.find((s) => s.id === w.main_store_id);
+    if (!st) continue;
+    for (let d = 0; d < 7; d++) {
+      const lv = leaveAt(leaves, w.id, d);
+      if (lv && !lv.full) {
+        // Seed the complement: the worker is available OUTSIDE the leave
+        // window, so the changeover should sit at the leave boundary.
+        claim(st, d, lv, w.id, false);
+      }
+    }
+  }
+
+  return { splitTimes: out, conflicts };
 }
 
 /**
@@ -274,15 +394,17 @@ export function offDayHistory(historyWeeks, workers) {
 // ---------- Generator ----------
 
 /**
- * Generate the week. Returns { schedule, violations }.
+ * Generate the week. Returns { schedule, violations, splitTimes }.
  * Violations are only Priority 1–5 problems the engine could not solve;
  * P6–P9 are relaxed internally without reporting.
  *
- * leaves:  { workerId: [bool x7] }
- * locks:   { workerId: [storeId|null x7] } — guaranteed assignments
+ * leaves:  { workerId: [(bool | {start,end}) x7] } — ranges are partial leaves
+ * locks:   { workerId: [(storeId | {storeId,start,end} | null) x7] }
  * lastWeekLoad: { workerId: [0|1|2 x7] } from weekLoadFromSchedule()
  * history: array of the last saved week schedules (for P9; needs >= 2 to act)
- * splitTimes: per-instance split overrides (usually empty at generation)
+ * splitTimes: per-instance split overrides. Time-range locks/leaves seed
+ *   additional overrides (seedSplitTimes) — the merged map is returned so the
+ *   caller can display and persist the changeovers the schedule was built on.
  */
 export function generateSchedule({
   stores,
@@ -291,11 +413,16 @@ export function generateSchedule({
   locks = {},
   lastWeekLoad = {},
   history = [],
-  splitTimes = {},
+  splitTimes: splitTimesIn = {},
 }) {
   const schedule = {};
   workers.forEach((w) => (schedule[w.id] = EMPTY_WEEK()));
   const violations = [];
+
+  // Time-range constraints line the store's changeover up with their boundary
+  // before anything is placed; irreconcilable range pairs surface as P4.
+  const { splitTimes, conflicts } = seedSplitTimes({ stores, workers, leaves, locks, splitTimes: splitTimesIn });
+  violations.push(...conflicts);
 
   const storeById = (id) => stores.find((s) => s.id === id);
   const streak = (w, d) => streakBefore(w.id, d, schedule, lastWeekLoad);
@@ -308,12 +435,23 @@ export function generateSchedule({
 
   /**
    * Can w take `half` ('am'|'pm'|'full') at store on day d without breaking
-   * P1 (slot taken / real time overlap) or P2 (split-only same-worker day)?
+   * P1 (slot taken / real time overlap), P2 (split-only same-worker day), or
+   * P3 (a partial leave window — checked with the same real-interval math)?
    */
   function canTake(w, d, half, store) {
     const slot = schedule[w.id][d];
-    if (half === 'full') return slot.am == null && slot.pm == null && !isSplitOnly(store);
+    const lv = leaveAt(leaves, w.id, d);
+    const clearOfLeave = (win) => !lv || lv.full || !windowsOverlap(win, lv);
+    if (half === 'full') {
+      return (
+        slot.am == null &&
+        slot.pm == null &&
+        !isSplitOnly(store) &&
+        clearOfLeave(shiftWindow(store, d, 'full', splitTimes))
+      );
+    }
     if (slot[half] != null) return false;
+    if (!clearOfLeave(shiftWindow(store, d, half, splitTimes))) return false;
     const other = half === 'am' ? 'pm' : 'am';
     if (isSplitOnly(store) && slot[other] === store.id) return false; // P2
     if (slot[other] != null) {
@@ -379,7 +517,7 @@ export function generateSchedule({
           .filter(
             (v) =>
               v.id !== w.id &&
-              !onLeave(leaves, v.id, m) &&
+              !fullLeave(leaves, v.id, m) &&
               canTake(v, m, half, storeX) &&
               allowanceOK(v, m, half) &&
               (schedule[v.id][m][other] == null ? true : fullRunIfFilled(v, m) <= HARD_MAX_CONSEC)
@@ -403,7 +541,8 @@ export function generateSchedule({
   // Silent relaxation order: P7 soft→hard, then P6 (unlinked), then the P8
   // mid-streak split. Breaking P5 (allowance) is last and is reported.
   function pick(store, d, mode) {
-    const base = workers.filter((w) => !onLeave(leaves, w.id, d) && canTake(w, d, mode, store));
+    // Full-day leaves exclude outright; partial leaves are window-checked in canTake.
+    const base = workers.filter((w) => !fullLeave(leaves, w.id, d) && canTake(w, d, mode, store));
     const tiers = [
       (w) => isLinked(w, store.id) && streak(w, d) < SOFT_MAX_CONSEC && allowanceOK(w, d, mode),
       (w) => isLinked(w, store.id) && streak(w, d) < HARD_MAX_CONSEC && allowanceOK(w, d, mode), // P7 → ceiling
@@ -452,7 +591,7 @@ export function generateSchedule({
               .filter(
                 (v) =>
                   v.id !== w.id &&
-                  !onLeave(leaves, v.id, m) &&
+                  !fullLeave(leaves, v.id, m) &&
                   canTake(v, m, 'full', store) &&
                   allowanceOK(v, m, 'full') &&
                   fullRunIfFilled(v, m) <= HARD_MAX_CONSEC
@@ -472,7 +611,7 @@ export function generateSchedule({
                 .filter(
                   (v) =>
                     v.id !== w.id &&
-                    !onLeave(leaves, v.id, m) &&
+                    !fullLeave(leaves, v.id, m) &&
                     canTake(v, m, half, store) &&
                     allowanceOK(v, m, half)
                 )
@@ -492,15 +631,26 @@ export function generateSchedule({
   }
 
   for (let d = 0; d < 7; d++) {
-    // --- P4: locks are placed first. On a split-only store the locked worker
-    // gets one half (P2 outranks the lock's full-day shape; the lock itself —
-    // "works that store that day" — is still honoured).
+    // --- P4: locks are placed first. A time-range lock takes exactly the half
+    // its window maps to (the changeover was seeded to its boundary) — the
+    // other half stays open for normal P1 fill. On a split-only store a
+    // whole-day lock gets one half (P2 outranks the lock's full-day shape;
+    // the lock itself — "works that store that day" — is still honoured).
     for (const w of workers) {
-      const target = lockAt(locks, w.id, d);
-      if (target == null) continue;
-      const st = storeById(target);
-      if (st && isSplitOnly(st)) schedule[w.id][d].am = target;
-      else schedule[w.id][d] = { am: target, pm: target };
+      const lk = lockAt(locks, w.id, d);
+      if (lk == null) continue;
+      const st = storeById(lk.storeId);
+      if (st && lk.start != null) {
+        const half = rangeHalfFor(st, d, lk, splitTimes);
+        if (half === 'am' || half === 'pm') {
+          schedule[w.id][d][half] = lk.storeId;
+          continue;
+        }
+        // 'full' (range covers the whole window) or unanchored (input
+        // validation prevents; defensively treated as whole-day below).
+      }
+      if (st && isSplitOnly(st)) schedule[w.id][d].am = lk.storeId;
+      else schedule[w.id][d] = { am: lk.storeId, pm: lk.storeId };
     }
 
     // --- Mains default to their home store on days they can work ---
@@ -508,7 +658,7 @@ export function generateSchedule({
       const main = workers.find((w) => w.main_store_id === store.id);
       if (!main) continue;
       if (lockAt(locks, main.id, d) != null) continue;
-      if (onLeave(leaves, main.id, d)) continue;
+      if (fullLeave(leaves, main.id, d)) continue;
       if (streak(main, d) >= SOFT_MAX_CONSEC) continue; // rest them if a float can cover
       if (isSplitOnly(store)) {
         if (coveredAt(store.id, d, 'am')) continue;
@@ -554,7 +704,7 @@ export function generateSchedule({
     }
   }
 
-  return { schedule, violations };
+  return { schedule, violations, splitTimes };
 }
 
 // ---------- Live P1–P5 checks (review screen + manual edits) ----------
@@ -607,22 +757,35 @@ export function computeViolations(schedule, { stores, workers, locks = {}, leave
         }
       }
 
-      // P3: assigned on a requested leave day.
-      if (onLeave(leaves, w.id, d) && (slot.am != null || slot.pm != null)) {
-        out.push({ priority: 3, type: 'leave', workerId: w.id, dayIdx: d });
+      // P3: assigned during a requested leave. A whole-day leave means any
+      // assignment violates; a range leave violates only when an assigned
+      // interval genuinely overlaps the leave window (same real-time math as
+      // double-booking).
+      const lv = leaveAt(leaves, w.id, d);
+      if (lv) {
+        const working = slot.am != null || slot.pm != null;
+        const clash = lv.full ? working : ivs.some((iv) => windowsOverlap(iv, lv));
+        if (clash) out.push({ priority: 3, type: 'leave', workerId: w.id, dayIdx: d });
       }
     }
 
-    // P4: locks — the locked worker is at the locked store for at least one half.
-    const lrow = locks[w.id];
-    if (lrow) {
-      for (let d = 0; d < 7; d++) {
-        const target = lrow[d];
-        if (target == null) continue;
-        const s = row[d] || emptyDay();
-        if (s.am !== target && s.pm !== target) {
-          out.push({ priority: 4, type: 'lock', workerId: w.id, storeId: target, dayIdx: d });
-        }
+    // P4: locks. A whole-day lock is honoured when the worker holds at least
+    // one half at that store; a time-range lock needs an assigned interval at
+    // that store covering the whole locked window.
+    for (let d = 0; d < 7; d++) {
+      const lk = lockAt(locks, w.id, d);
+      if (lk == null) continue;
+      const s = row[d] || emptyDay();
+      let honoured;
+      if (lk.start != null) {
+        honoured = dayIntervals(s, stores, d, splitTimes).some(
+          (iv) => iv.storeId === lk.storeId && iv.start <= lk.start && iv.end >= lk.end
+        );
+      } else {
+        honoured = s.am === lk.storeId || s.pm === lk.storeId;
+      }
+      if (!honoured) {
+        out.push({ priority: 4, type: 'lock', workerId: w.id, storeId: lk.storeId, dayIdx: d });
       }
     }
 
@@ -648,6 +811,8 @@ export function violationKey(v) {
       return `v|${v.workerId}|${v.dayIdx}`;
     case 'lock':
       return `l|${v.workerId}|${v.storeId}|${v.dayIdx}`;
+    case 'lock_conflict':
+      return `lc|${v.storeId}|${v.dayIdx}|${v.workerId}|${v.otherWorkerId}`;
     case 'allowance':
       return `a|${v.workerId}|${v.dayIdx != null ? v.dayIdx : 'wk'}`;
     default:
@@ -669,6 +834,8 @@ export function violationMessage(v, stores, workers) {
       return `P3 · Leave: ${workerName(v.workerId)} requested ${DAY_NAMES[v.dayIdx]} off but is scheduled to work.`;
     case 'lock':
       return `P4 · Lock: ${workerName(v.workerId)} was locked to ${storeName(v.storeId)} on ${DAY_NAMES[v.dayIdx]} but isn't scheduled there.`;
+    case 'lock_conflict':
+      return `P4 · Lock conflict: ${workerName(v.workerId)}'s and ${workerName(v.otherWorkerId)}'s time-range constraints at ${storeName(v.storeId)} on ${DAY_NAMES[v.dayIdx]} need different changeover points (${fmtMin(v.boundaryB)} vs ${fmtMin(v.boundaryA)}) — one of them can't be honoured as entered.`;
     case 'allowance':
       return `P5 · Day Allowance: ${workerName(v.workerId)} is over their weekly limit${v.load != null ? ` (${v.load} of ${v.max} days)` : ''}.`;
     default:
@@ -734,7 +901,13 @@ export function findCoverCandidates({
     if (w.id === workerId) continue;
     if (!isLinked(w, storeId)) continue;
 
-    const requestedOff = onLeave(leaves, w.id, dayIdx);
+    // Requested-off = a whole-day leave, or a range leave overlapping the
+    // window(s) that need covering.
+    const lv = leaveAt(leaves, w.id, dayIdx);
+    const requestedOff =
+      !!lv &&
+      (lv.full ||
+        halves.some((h) => store && windowsOverlap(shiftWindow(store, dayIdx, h, splitTimes), lv)));
     // Free that day = every target half is takeable without a real-time clash.
     const wRow = schedule[w.id] || EMPTY_WEEK();
     const free = halves.every((h) => {
@@ -828,7 +1001,7 @@ export function findChainSwaps({
   for (const X of workers) {
     if (results.length >= limit) break;
     if (X.id === workerId || !isLinked(X, storeId)) continue;
-    if (onLeave(leaves, X.id, dayIdx)) continue;
+    if (leaveAt(leaves, X.id, dayIdx)) continue; // any leave blocks chain hops (conservative)
     const xSlot = (schedule[X.id] || EMPTY_WEEK())[dayIdx];
     if (!xSlot || (xSlot.am == null && xSlot.pm == null)) continue; // free → direct candidate, not a chain
     if (lockAt(locks, X.id, dayIdx) != null) continue; // don't unpick locks
@@ -845,7 +1018,7 @@ export function findChainSwaps({
       if (results.length >= limit) break;
       if (Y.id === X.id || Y.id === workerId) continue;
       if (!isLinked(Y, s2)) continue;
-      if (onLeave(leaves, Y.id, dayIdx)) continue;
+      if (leaveAt(leaves, Y.id, dayIdx)) continue; // any leave blocks chain hops (conservative)
       const ySlot = (schedule[Y.id] || EMPTY_WEEK())[dayIdx];
       if (ySlot && (ySlot.am != null || ySlot.pm != null)) continue; // deeper chains: skip (kept shallow on purpose)
 
@@ -895,6 +1068,29 @@ export function fmtMin(min) {
   const ap = h >= 12 ? 'PM' : 'AM';
   const h12 = ((h + 11) % 12) + 1;
   return mm ? `${h12}:${String(mm).padStart(2, '0')} ${ap}` : `${h12} ${ap}`;
+}
+
+/** Compact clock time for dense cells: "8am", "3:30pm". */
+export function fmtMinCompact(min) {
+  const m = ((min % 1440) + 1440) % 1440;
+  const h = Math.floor(m / 60);
+  const mm = m % 60;
+  const ap = h >= 12 ? 'pm' : 'am';
+  const h12 = ((h + 11) % 12) + 1;
+  return mm ? `${h12}:${String(mm).padStart(2, '0')}${ap}` : `${h12}${ap}`;
+}
+
+/** Compact "8am–3pm" range for a half (or 'full') at a store on a day. */
+export function shiftTimeCompact(store, dayIdx, half, splitTimes = {}) {
+  if (!store) return '';
+  const w = shiftWindow(store, dayIdx, half, splitTimes);
+  return `${fmtMinCompact(w.start)}–${fmtMinCompact(w.end)}`;
+}
+
+/** Compact "2pm–10pm" from a normalized {start,end} minutes range. */
+export function rangeCompact(range) {
+  if (!range || range.start == null) return '';
+  return `${fmtMinCompact(range.start)}–${fmtMinCompact(range.end)}`;
 }
 
 /** "8 AM–3 PM" style label for a half at a store on a day. */

@@ -949,3 +949,60 @@ button.cell:not(:disabled):active { filter: brightness(0.95); }
   padding: 4px 6px;
 }
 .undo-toast-btn:hover { text-decoration: underline; }
+
+/* ==========================================================================
+   v4.1: shift timing in every cell (name primary, window secondary)
+   ========================================================================== */
+.cell { min-width: 92px; padding: 6px 9px; }
+.cell-name { display: block; font-weight: 700; font-size: 13px; line-height: 1.25; white-space: nowrap; }
+.cell-time {
+  display: block;
+  font-size: 10.5px;
+  font-weight: 600;
+  line-height: 1.3;
+  opacity: 0.62;
+  letter-spacing: 0.2px;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+.cell-halves { display: flex; flex-direction: column; gap: 4px; }
+.cell-half { display: block; }
+.cell-half + .cell-half { border-top: 1px dashed rgba(23, 34, 43, 0.18); padding-top: 4px; }
+.cell-half-open .cell-name { color: var(--gap); }
+/* Gap cells inherit strong red text; keep the time line quieter there too. */
+.cell-gap .cell-time { opacity: 0.75; }
+@media (max-width: 719px) {
+  .cell { min-width: 84px; }
+  .cell-name { font-size: 12.5px; }
+  .cell-time { font-size: 10px; }
+}
+
+/* ---------- v4.1: time-range leaves & locks ---------- */
+.range-td { position: relative; }
+.range-btn {
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  border: 1px solid var(--line);
+  border-radius: 50%;
+  background: #fff;
+  font-size: 11px;
+  line-height: 1;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 1px 3px rgba(23, 34, 43, 0.18);
+}
+.range-btn:hover { background: #f0f5fa; }
+.checkcell-range { width: auto; min-width: 44px; padding: 0 6px; font-size: 11px; white-space: nowrap; }
+.range-fields { display: flex; gap: 14px; margin: 10px 0 4px; }
+.range-fields label { display: flex; flex-direction: column; gap: 4px; font-size: 12px; font-weight: 700; color: var(--muted); }
+.range-fields input[type='time'] { padding: 8px 10px; border: 1px solid var(--line); border-radius: 6px; font: inherit; }
+.lock-store-row { display: flex; align-items: center; gap: 8px; }
+.lock-store-name { flex: 1; text-align: left; background: none; border: none; font: inherit; padding: 0; cursor: pointer; }
+.lock-range-editor { margin: 4px 0 10px; padding: 10px 12px; border: 1px dashed var(--line); border-radius: 8px; background: #f7fafc; }
+.print-scope { padding: 8px 10px; border: 1px solid var(--line); border-radius: 6px; font: inherit; background: #fff; max-width: 180px; }

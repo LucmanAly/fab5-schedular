@@ -1,5 +1,6 @@
 import {
   generateSchedule,
+  cloneSchedule,
   computeGaps,
   computeViolations,
   streakBefore,
@@ -437,6 +438,91 @@ function setup(numStores, numFloats) {
   check(
     'chain result keeps both stores covered',
     !!ch && computeGaps(ch.schedule, stores, workers).filter((g) => g.dayIdx === 0).length === 0
+  );
+}
+
+// ---------- v4.1: time-range leaves and locks ----------
+
+// 23. A time-range lock carves out a split at its boundary and leaves the
+// remainder open for normal P1 fill — it does not claim the whole day.
+{
+  const stores = [{ id: 1, name: 'S' }]; // weekday 8am–10pm
+  const workers = [
+    { id: 1, name: 'A', store_ids: [1], main_store_id: null },
+    { id: 2, name: 'B', store_ids: [1], main_store_id: null },
+  ];
+  const locks = { 1: [{ storeId: 1, start: '14:00', end: '22:00' }, null, null, null, null, null, null] };
+  const { schedule, violations, splitTimes } = generateSchedule({ stores, workers, locks });
+  check('range lock seeds the store changeover to its boundary', splitTimes['1-0'] === '14:00');
+  check('locked worker gets exactly their window (2nd shift)', schedule[1][0].pm === 1 && schedule[1][0].am !== 1);
+  check('remainder stays open and is filled by someone else', schedule[2][0].am === 1);
+  check('clean range lock generates no violations', violations.length === 0);
+  const flagged = computeViolations(schedule, { stores, workers, locks, splitTimes });
+  check('range lock honoured per computeViolations', !flagged.some((v) => v.type === 'lock'));
+  // A manual edit that takes the locked window away is flagged as P4.
+  const broken = cloneSchedule(schedule);
+  broken[1][0] = { am: null, pm: null };
+  broken[2][0] = { am: 1, pm: 1 };
+  const after = computeViolations(broken, { stores, workers, locks, splitTimes });
+  check('breaking a range lock manually is flagged as P4', after.some((v) => v.type === 'lock' && v.workerId === 1));
+}
+
+// 24. A time-range leave restricts an otherwise-full-day worker (the store's
+// Main) to their available portion; the rest of the day is covered by others.
+{
+  const stores = [{ id: 1, name: 'S' }];
+  const workers = [
+    { id: 1, name: 'M', store_ids: [1], main_store_id: 1 },
+    { id: 2, name: 'F', store_ids: [1], main_store_id: null },
+  ];
+  // M unavailable 2pm–close; F unavailable open–2pm (complementary windows).
+  const leaves = {
+    1: [{ start: '14:00', end: '22:00' }, false, false, false, false, false, false],
+    2: [{ start: '08:00', end: '14:00' }, false, false, false, false, false, false],
+  };
+  const { schedule, violations, splitTimes } = generateSchedule({ stores, workers, leaves });
+  check('range leave on the Main seeds their store changeover', splitTimes['1-0'] === '14:00');
+  check('main works only outside their leave window', schedule[1][0].am === 1 && schedule[1][0].pm == null);
+  check('rest of the day covered by the other worker', schedule[2][0].pm === 1 && schedule[2][0].am == null);
+  check('partial-leave day still fully covered, no violations', violations.length === 0);
+  const flagged = computeViolations(schedule, { stores, workers, leaves, splitTimes });
+  check('no P3 flagged when work stays outside leave windows', !flagged.some((v) => v.type === 'leave'));
+  // Manually assigning M into their leave window IS flagged as P3.
+  const bad = cloneSchedule(schedule);
+  bad[1][0] = { am: 1, pm: 1 };
+  bad[2][0] = { am: null, pm: null };
+  const after = computeViolations(bad, { stores, workers, leaves, splitTimes });
+  check('working into a leave window is flagged as P3', after.some((v) => v.type === 'leave' && v.workerId === 1));
+}
+
+// 25. Range constraints that need different changeover points on the same
+// store+day surface as a P4 conflict violation, not a silent winner.
+{
+  const stores = [{ id: 1, name: 'S' }];
+  const workers = [
+    { id: 1, name: 'A', store_ids: [1], main_store_id: null },
+    { id: 2, name: 'B', store_ids: [1], main_store_id: null },
+    { id: 3, name: 'C', store_ids: [1], main_store_id: null },
+  ];
+  const conflicting = {
+    1: [{ storeId: 1, start: '08:00', end: '15:00' }, null, null, null, null, null, null],
+    2: [{ storeId: 1, start: '14:00', end: '22:00' }, null, null, null, null, null, null],
+  };
+  const { violations } = generateSchedule({ stores, workers, locks: conflicting });
+  check(
+    'overlapping range locks surface as a P4 lock conflict',
+    violations.some((v) => v.priority === 4 && v.type === 'lock_conflict')
+  );
+
+  // Complementary ranges (8–3 and 3–10) are NOT a conflict — both honoured.
+  const compatible = {
+    1: [{ storeId: 1, start: '08:00', end: '15:00' }, null, null, null, null, null, null],
+    2: [{ storeId: 1, start: '15:00', end: '22:00' }, null, null, null, null, null, null],
+  };
+  const ok = generateSchedule({ stores, workers, locks: compatible });
+  check(
+    'complementary range locks coexist cleanly',
+    ok.violations.length === 0 && ok.schedule[1][0].am === 1 && ok.schedule[2][0].pm === 1
   );
 }
 

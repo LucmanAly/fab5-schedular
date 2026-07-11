@@ -150,7 +150,16 @@ export async function saveWeek(weekStart, { leaves = {}, locks = {}, schedule = 
   const leaveRows = [];
   for (const [workerId, days] of Object.entries(leaves)) {
     (days || []).forEach((on, dayIdx) => {
-      if (on) leaveRows.push({ week_start: weekStart, worker_id: Number(workerId), day_index: dayIdx });
+      if (!on) return;
+      // true = whole-day leave; { start, end } = time-range leave (v4.1).
+      const ranged = on !== true && on.start && on.end;
+      leaveRows.push({
+        week_start: weekStart,
+        worker_id: Number(workerId),
+        day_index: dayIdx,
+        start_time: ranged ? on.start : null,
+        end_time: ranged ? on.end : null,
+      });
     });
   }
   await sb(`leaves?week_start=eq.${weekStart}`, { method: 'DELETE', prefer: 'return=minimal' });
@@ -158,8 +167,18 @@ export async function saveWeek(weekStart, { leaves = {}, locks = {}, schedule = 
 
   const lockRows = [];
   for (const [workerId, days] of Object.entries(locks)) {
-    (days || []).forEach((storeId, dayIdx) => {
-      if (storeId != null) lockRows.push({ week_start: weekStart, worker_id: Number(workerId), day_index: dayIdx, store_id: storeId });
+    (days || []).forEach((lock, dayIdx) => {
+      if (lock == null) return;
+      // storeId = whole-day lock; { storeId, start, end } = time-range lock (v4.1).
+      const ranged = typeof lock === 'object';
+      lockRows.push({
+        week_start: weekStart,
+        worker_id: Number(workerId),
+        day_index: dayIdx,
+        store_id: ranged ? lock.storeId : lock,
+        start_time: ranged && lock.start ? lock.start : null,
+        end_time: ranged && lock.end ? lock.end : null,
+      });
     });
   }
   await sb(`locks?week_start=eq.${weekStart}`, { method: 'DELETE', prefer: 'return=minimal' });
@@ -206,12 +225,13 @@ export async function loadWeek(weekStart) {
   const leaves = {};
   for (const r of leaveRows || []) {
     if (!leaves[r.worker_id]) leaves[r.worker_id] = [false, false, false, false, false, false, false];
-    leaves[r.worker_id][r.day_index] = true;
+    leaves[r.worker_id][r.day_index] = r.start_time && r.end_time ? { start: r.start_time, end: r.end_time } : true;
   }
   const locks = {};
   for (const r of lockRows || []) {
     if (!locks[r.worker_id]) locks[r.worker_id] = [null, null, null, null, null, null, null];
-    locks[r.worker_id][r.day_index] = r.store_id;
+    locks[r.worker_id][r.day_index] =
+      r.start_time && r.end_time ? { storeId: r.store_id, start: r.start_time, end: r.end_time } : r.store_id;
   }
   const schedule = {};
   for (const r of schedRows || []) {

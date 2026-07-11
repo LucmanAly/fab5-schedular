@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { DAY_NAMES, workerAtHalf, formatWeek } from '../lib/scheduler';
+import { DAY_NAMES, workerAtHalf, formatWeek, shiftTimeCompact } from '../lib/scheduler';
 
 /**
  * Tier 1 destructive confirmation (§8) — for rare, hard-to-reverse deletes
@@ -148,34 +148,55 @@ export function DiagnosticsPanel({ status, diag, lastError, onTest, onClose }) {
   );
 }
 
-function daySummaryByWorker(schedule, storeName, wId, d, leaves) {
+function daySummaryByWorker(schedule, stores, storeName, wId, d, leaves, splitTimes) {
   const s = (schedule[wId] && schedule[wId][d]) || { am: null, pm: null };
+  const byId = (id) => stores.find((st) => st.id === id);
   if (s.am == null && s.pm == null) return leaves[wId] && leaves[wId][d] ? 'LEAVE' : '—';
-  if (s.am != null && s.am === s.pm) return storeName(s.am);
-  const a = s.am != null ? storeName(s.am) : '—';
-  const p = s.pm != null ? storeName(s.pm) : '—';
-  return `AM ${a} / PM ${p}`;
+  if (s.am != null && s.am === s.pm) {
+    return `${storeName(s.am)} ${shiftTimeCompact(byId(s.am), d, 'full', splitTimes)}`;
+  }
+  const a = s.am != null ? `${storeName(s.am)} ${shiftTimeCompact(byId(s.am), d, 'am', splitTimes)}` : '—';
+  const p = s.pm != null ? `${storeName(s.pm)} ${shiftTimeCompact(byId(s.pm), d, 'pm', splitTimes)}` : '—';
+  return `${a} / ${p}`;
 }
 
-function daySummaryByStore(schedule, workers, storeId, d) {
-  const am = workerAtHalf(schedule, workers, storeId, d, 'am');
-  const pm = workerAtHalf(schedule, workers, storeId, d, 'pm');
-  if (am && pm && am.id === pm.id) return am.name;
-  const a = am ? am.name : 'OPEN';
-  const p = pm ? pm.name : 'OPEN';
+function daySummaryByStore(schedule, workers, store, d, splitTimes) {
+  const am = workerAtHalf(schedule, workers, store.id, d, 'am');
+  const pm = workerAtHalf(schedule, workers, store.id, d, 'pm');
+  if (am && pm && am.id === pm.id) return `${am.name} ${shiftTimeCompact(store, d, 'full', splitTimes)}`;
   if (!am && !pm) return 'OPEN';
-  return `AM ${a} / PM ${p}`;
+  const a = `${am ? am.name : 'OPEN'} ${shiftTimeCompact(store, d, 'am', splitTimes)}`;
+  const p = `${pm ? pm.name : 'OPEN'} ${shiftTimeCompact(store, d, 'pm', splitTimes)}`;
+  return `${a} / ${p}`;
 }
 
-export function PrintOverlay({ mode, weekStart, stores, workers, schedule, leaves, labels, onClose }) {
+export function PrintOverlay({ mode, weekStart, stores, workers, schedule, leaves, labels, splitTimes = {}, onClose }) {
   const storeName = (id) => (stores.find((s) => s.id === id) || {}).name || `Store ${id}`;
   const title = `Week of ${formatWeek(weekStart)}`;
+  // 'all' (default) or a single worker/store id — the collective print stays
+  // the default; one person's/store's sheet is a toolbar pick away.
+  const [only, setOnly] = useState('all');
+  const shownWorkers = only === 'all' ? workers : workers.filter((w) => String(w.id) === only);
+  const shownStores = only === 'all' ? stores : stores.filter((s) => String(s.id) === only);
 
   return (
     <div className="print-overlay">
       <div className="print-toolbar">
         <span>{mode === 'worker' ? 'Print by worker' : 'Print by store'} — {title}</span>
         <div className="print-toolbar-btns">
+          <select
+            className="print-scope"
+            value={only}
+            onChange={(e) => setOnly(e.target.value)}
+            aria-label={mode === 'worker' ? 'Which workers to print' : 'Which stores to print'}
+          >
+            <option value="all">{mode === 'worker' ? 'All workers' : 'All stores'}</option>
+            {(mode === 'worker' ? workers : stores).map((x) => (
+              <option key={x.id} value={String(x.id)}>
+                {x.name}
+              </option>
+            ))}
+          </select>
           <button type="button" className="btn btn-primary" onClick={() => window.print()}>
             Print / Save PDF
           </button>
@@ -188,13 +209,12 @@ export function PrintOverlay({ mode, weekStart, stores, workers, schedule, leave
       <div className="print-sheet">
         {mode === 'worker' ? (
           <>
-            <h1>Staff schedule — {title}</h1>
-            {workers.map((w) => (
+            <h1>
+              {only === 'all' ? 'Staff schedule' : `${shownWorkers[0] ? shownWorkers[0].name : ''} — schedule`} — {title}
+            </h1>
+            {shownWorkers.map((w) => (
               <section key={w.id} className="print-block">
-                <h2>
-                  {w.name}{' '}
-                  <em>({w.main_store_id != null ? `main — ${storeName(w.main_store_id)}` : 'float'})</em>
-                </h2>
+                <h2>{w.name}</h2>
                 <table>
                   <thead>
                     <tr>{labels.map((l) => <th key={l}>{l}</th>)}</tr>
@@ -202,7 +222,7 @@ export function PrintOverlay({ mode, weekStart, stores, workers, schedule, leave
                   <tbody>
                     <tr>
                       {DAY_NAMES.map((_, d) => (
-                        <td key={d}>{daySummaryByWorker(schedule, storeName, w.id, d, leaves)}</td>
+                        <td key={d}>{daySummaryByWorker(schedule, stores, storeName, w.id, d, leaves, splitTimes)}</td>
                       ))}
                     </tr>
                   </tbody>
@@ -212,8 +232,10 @@ export function PrintOverlay({ mode, weekStart, stores, workers, schedule, leave
           </>
         ) : (
           <>
-            <h1>Store coverage — {title}</h1>
-            {stores.map((s) => (
+            <h1>
+              {only === 'all' ? 'Store coverage' : `${shownStores[0] ? shownStores[0].name : ''} — coverage`} — {title}
+            </h1>
+            {shownStores.map((s) => (
               <section key={s.id} className="print-block">
                 <h2>{s.name}</h2>
                 <table>
@@ -223,7 +245,7 @@ export function PrintOverlay({ mode, weekStart, stores, workers, schedule, leave
                   <tbody>
                     <tr>
                       {DAY_NAMES.map((_, d) => (
-                        <td key={d}>{daySummaryByStore(schedule, workers, s.id, d)}</td>
+                        <td key={d}>{daySummaryByStore(schedule, workers, s, d, splitTimes)}</td>
                       ))}
                     </tr>
                   </tbody>

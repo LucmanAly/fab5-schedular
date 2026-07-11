@@ -2,7 +2,6 @@ import { useState } from 'react';
 import {
   workerAtHalf,
   cloneSchedule,
-  daysWorked,
   weekWorkload,
   maxWorkdays,
   workerHours,
@@ -10,6 +9,10 @@ import {
   computeGaps,
   halfLabel,
   shiftTimeLabel,
+  shiftTimeCompact,
+  rangeCompact,
+  leaveAt,
+  lockAt,
   splitMinFor,
   defaultSplitMin,
   minToHHMM,
@@ -56,9 +59,9 @@ export default function ScheduleView({
   const storeName = (id) => (stores.find((s) => s.id === id) || {}).name || `Store ${id}`;
   const storeById = (id) => stores.find((s) => s.id === id);
   const slot = (wId, d) => (schedule[wId] && schedule[wId][d]) || { am: null, pm: null };
-  const lockedAt = (wId, d) => {
-    const row = locks[wId];
-    return row ? row[d] : null;
+  const lockedStore = (wId, d) => {
+    const lk = lockAt(locks, wId, d);
+    return lk ? lk.storeId : null;
   };
 
   function openCell(storeId, dayIdx) {
@@ -129,8 +132,9 @@ export default function ScheduleView({
   }
 
   function workerNote(w, dayIdx) {
-    if (leaves[w.id] && leaves[w.id][dayIdx]) return { kind: 'leave', label: 'On leave' };
-    const lockStore = lockedAt(w.id, dayIdx);
+    const lv = leaveAt(leaves, w.id, dayIdx);
+    if (lv) return { kind: 'leave', label: lv.full ? 'On leave' : `On leave ${rangeCompact(lv)}` };
+    const lockStore = lockedStore(w.id, dayIdx);
     if (lockStore != null) return { kind: 'lock', label: `Locked to ${storeName(lockStore)}` };
     const streak = streakBefore(w.id, dayIdx, schedule, lastWeekLoad);
     if (streak >= SOFT_MAX_CONSEC) return { kind: 'rest', label: `${streak} days straight — needs rest` };
@@ -143,6 +147,9 @@ export default function ScheduleView({
   }
 
   // ----- cell rendering -----
+  // Every occupied cell shows the worker's name (primary) and the real
+  // clock window they're on for (secondary), from the same shift-window
+  // math the generator uses.
   function CellContent({ storeId, dayIdx }) {
     const store = storeById(storeId);
     const am = workerAtHalf(schedule, workers, storeId, dayIdx, 'am');
@@ -150,7 +157,7 @@ export default function ScheduleView({
 
     if (am && pm && am.id === pm.id) {
       const kind = am.main_store_id === storeId ? 'main' : 'float';
-      const locked = lockedAt(am.id, dayIdx) === storeId;
+      const locked = lockedStore(am.id, dayIdx) === storeId;
       return (
         <button
           type="button"
@@ -158,18 +165,25 @@ export default function ScheduleView({
           disabled={readOnly}
           onClick={() => openCell(storeId, dayIdx)}
         >
-          {locked ? '🔒 ' : ''}
-          {am.name}
+          <span className="cell-name">
+            {locked ? '🔒 ' : ''}
+            {am.name}
+          </span>
+          <span className="cell-time">{shiftTimeCompact(store, dayIdx, 'full', splitTimes)}</span>
         </button>
       );
     }
 
-    const split = store ? fmtMin(splitMinFor(store, dayIdx, splitTimes)) : '';
-    const line = (w, half) => {
-      const tag = half === 'am' ? `→${split}` : `${split}→`;
-      return w ? `${tag} ${w.name}` : `${tag} OPEN`;
-    };
     const anyOpen = !am || !pm;
+    const halfBlock = (w, half) => (
+      <span className={`cell-half ${w ? '' : 'cell-half-open'}`}>
+        <span className="cell-name">
+          {w && lockedStore(w.id, dayIdx) === storeId ? '🔒 ' : ''}
+          {w ? w.name : 'OPEN'}
+        </span>
+        <span className="cell-time">{shiftTimeCompact(store, dayIdx, half, splitTimes)}</span>
+      </span>
+    );
     return (
       <button
         type="button"
@@ -177,9 +191,9 @@ export default function ScheduleView({
         disabled={readOnly}
         onClick={() => openCell(storeId, dayIdx)}
       >
-        <span className="split-text">
-          <span>{line(am, 'am')}</span>
-          <span>{line(pm, 'pm')}</span>
+        <span className="cell-halves">
+          {halfBlock(am, 'am')}
+          {halfBlock(pm, 'pm')}
         </span>
       </button>
     );
@@ -188,14 +202,37 @@ export default function ScheduleView({
   function WorkerDayText({ w, dayIdx }) {
     const s = slot(w.id, dayIdx);
     if (s.am == null && s.pm == null) {
-      if (leaves[w.id] && leaves[w.id][dayIdx]) return <span className="cell cell-leave cell-static">Leave</span>;
+      const lv = leaveAt(leaves, w.id, dayIdx);
+      if (lv) {
+        return (
+          <span className="cell cell-leave cell-static">
+            <span className="cell-name">Leave</span>
+            {!lv.full && <span className="cell-time">{rangeCompact(lv)}</span>}
+          </span>
+        );
+      }
       return <span className="cell cell-off cell-static">Off</span>;
     }
-    if (s.am != null && s.am === s.pm) return <span className="cell cell-work cell-static">{storeName(s.am)}</span>;
+    if (s.am != null && s.am === s.pm) {
+      return (
+        <span className="cell cell-work cell-static">
+          <span className="cell-name">{storeName(s.am)}</span>
+          <span className="cell-time">{shiftTimeCompact(storeById(s.am), dayIdx, 'full', splitTimes)}</span>
+        </span>
+      );
+    }
+    const storeHalf = (sid, half) => (
+      <span className={`cell-half ${sid != null ? '' : 'cell-half-open'}`}>
+        <span className="cell-name">{sid != null ? storeName(sid) : '—'}</span>
+        {sid != null && (
+          <span className="cell-time">{shiftTimeCompact(storeById(sid), dayIdx, half, splitTimes)}</span>
+        )}
+      </span>
+    );
     return (
-      <span className="cell cell-work cell-static split-text">
-        <span>{s.am != null ? `1st ${storeName(s.am)}` : '1st —'}</span>
-        <span>{s.pm != null ? `2nd ${storeName(s.pm)}` : '2nd —'}</span>
+      <span className="cell cell-work cell-static cell-halves">
+        {storeHalf(s.am, 'am')}
+        {storeHalf(s.pm, 'pm')}
       </span>
     );
   }
@@ -277,9 +314,6 @@ export default function ScheduleView({
                 <div className="worker-card" key={w.id}>
                   <div className="worker-card-head">
                     {w.name}
-                    <span className={`chip chip-${w.main_store_id != null ? 'main' : 'float'}`}>
-                      {w.main_store_id != null ? 'main' : 'float'}
-                    </span>
                     <span className="worker-hours">{hoursOf(w.id)}h</span>
                   </div>
                   <WorkerDayText w={w} dayIdx={activeDay} />
@@ -339,12 +373,7 @@ export default function ScheduleView({
                 const over = load > maxWorkdays(w);
                 return (
                   <tr key={w.id}>
-                    <td className="sticky-col name-cell">
-                      {w.name}
-                      <span className={`chip chip-${w.main_store_id != null ? 'main' : 'float'}`}>
-                        {w.main_store_id != null ? 'main' : 'float'}
-                      </span>
-                    </td>
+                    <td className="sticky-col name-cell">{w.name}</td>
                     {labels.map((_, d) => (
                       <td key={d}>
                         <WorkerDayText w={w} dayIdx={d} />
@@ -511,9 +540,6 @@ function CellEditor({
                     >
                       <span className="pick-name">
                         {w.name}
-                        <span className={`chip chip-${w.main_store_id != null ? 'main' : 'float'}`}>
-                          {w.main_store_id != null ? 'main' : 'float'}
-                        </span>
                         <span className="pick-status">{note.label}</span>
                       </span>
                       {active && <span aria-hidden>✓</span>}
@@ -571,9 +597,6 @@ function CellEditor({
                     <div className={`pick pick-${note.kind}`}>
                       <span className="pick-name">
                         {w.name}
-                        <span className={`chip chip-${w.main_store_id != null ? 'main' : 'float'}`}>
-                          {w.main_store_id != null ? 'main' : 'float'}
-                        </span>
                         <span className="pick-status">{note.label}</span>
                       </span>
                       <span className="pick-btns">

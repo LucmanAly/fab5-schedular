@@ -295,7 +295,9 @@ export default function App() {
           }
         }
       }
-      const { schedule, violations } = generateSchedule({
+      // generateSchedule returns the splitTimes it was built on — time-range
+      // leaves/locks seed changeover overrides, so display must match.
+      const { schedule, violations, splitTimes } = generateSchedule({
         stores,
         workers,
         leaves: wiz.leaves,
@@ -308,8 +310,8 @@ export default function App() {
         schedule,
         lastWeekLoad: load,
         history,
-        splitTimes: {},
-        v0: versionEntry(schedule, {}, w.leaves),
+        splitTimes,
+        v0: versionEntry(schedule, splitTimes, w.leaves),
       }));
       setGenViolations(violations);
       setShowGenBox(violations.length > 0);
@@ -321,8 +323,12 @@ export default function App() {
     }
   }
 
-  function regenerate() {
-    const { schedule, violations } = generateSchedule({
+  // Generation is deterministic, so re-running it with unchanged inputs always
+  // reproduces v0 — the only real effect is discarding manual edits. The
+  // button says exactly that ("Reset to generated") and is disabled while the
+  // schedule is still pristine.
+  function resetToGenerated() {
+    const { schedule, violations, splitTimes } = generateSchedule({
       stores,
       workers,
       leaves: wiz.leaves,
@@ -330,12 +336,16 @@ export default function App() {
       lastWeekLoad: wiz.lastWeekLoad,
       history: wiz.history,
     });
-    setWiz((w) => ({ ...w, schedule, splitTimes: {}, v0: versionEntry(schedule, {}, w.leaves) }));
+    setWiz((w) => ({ ...w, schedule, splitTimes, v0: versionEntry(schedule, splitTimes, w.leaves) }));
     setGenViolations(violations);
     setShowGenBox(violations.length > 0);
-    setGenAttempts((n) => n + 1);
     setEditConflict(null);
   }
+
+  const wizPristine =
+    wiz.v0 && wiz.schedule
+      ? sameVersion(wiz.v0, versionEntry(wiz.schedule, wiz.splitTimes, wiz.leaves))
+      : true;
 
   // ---------- wizard: manual edits ----------
   // Manual edits are never blocked. New P1–P5 violations warn + confirm;
@@ -855,8 +865,18 @@ export default function App() {
                         <button type="button" className="btn btn-ghost" onClick={() => setWStep(1)}>
                           Back
                         </button>
-                        <button type="button" className="btn" onClick={regenerate}>
-                          Regenerate
+                        <button
+                          type="button"
+                          className="btn"
+                          disabled={wizPristine}
+                          title={
+                            wizPristine
+                              ? 'No manual edits to discard — this is the generated schedule'
+                              : 'Discard your manual edits and restore the auto-generated schedule'
+                          }
+                          onClick={resetToGenerated}
+                        >
+                          ↺ Reset to generated
                         </button>
                         <button type="button" className="btn btn-primary" onClick={() => setSaveOpen(true)}>
                           ✓ Save schedule
@@ -922,6 +942,7 @@ export default function App() {
           schedule={viewing.schedule || {}}
           leaves={viewing.leaves || {}}
           labels={dayLabels(viewing.weekStart)}
+          splitTimes={viewing.splitTimes || {}}
           onClose={() => setPrintMode(null)}
         />
       )}
