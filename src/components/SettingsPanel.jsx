@@ -1,9 +1,15 @@
-import { useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { ConfirmModal } from './Overlays';
 
 // Settings is a full page reached from the sidebar.
 // Setup order: 1) add stores, 2) add workers and link them to stores.
 // Names are case-insensitive: uniqueness checks and store matching ignore case.
+//
+// Every edit persists immediately — there is no Save button. Text/number
+// fields (names, hours, max workdays) commit on blur via useBlurCommit;
+// discrete actions (buttons, links, add/delete) commit on click. Deleting a
+// store or worker still asks for confirmation first (Tier 1, §8) — that's
+// the only "are you sure?" left in this screen.
 
 const norm = (s) => (s || '').trim().toLowerCase();
 
@@ -15,101 +21,183 @@ const STORE_DEFAULTS = {
   weekend_close: '22:00',
 };
 
+// Local draft that only commits (and reports validation errors) on blur, so
+// typing feels normal but nothing round-trips to the parent on every
+// keystroke. `commit` returns { ok:false, message } to reject and revert, or
+// nothing/{ok:true} to accept.
+function useBlurCommit(value, commit) {
+  const [draft, setDraft] = useState(value);
+  const [error, setError] = useState(null);
+
+  useEffect(() => {
+    setDraft(value);
+  }, [value]);
+
+  function onChange(e) {
+    setDraft(e.target.value);
+    if (error) setError(null);
+  }
+
+  function onBlur() {
+    if (draft === value) {
+      setError(null);
+      return;
+    }
+    const res = commit(draft);
+    if (res && res.ok === false) {
+      setError(res.message);
+      setDraft(value);
+    } else {
+      setError(null);
+    }
+  }
+
+  return { value: draft, error, onChange, onBlur };
+}
+
+// Workers linked to a store, Main first, then by each worker's own link rank
+// for this store (store_ids.indexOf) — reuses existing data, no new fields.
+function linkedWorkersFor(store, workers) {
+  return workers
+    .filter((w) => (w.store_ids || []).includes(store.id))
+    .map((w) => ({
+      worker: w,
+      rank: w.store_ids.indexOf(store.id),
+      isMain: w.main_store_id === store.id,
+    }))
+    .sort((a, b) => (b.isMain ? 1 : 0) - (a.isMain ? 1 : 0) || a.rank - b.rank || a.worker.name.localeCompare(b.worker.name));
+}
+
 export default function SettingsPage({ stores, workers, prompt, onSave, onToast }) {
-  const [tempStores, setTempStores] = useState(stores);
-  const [tempWorkers, setTempWorkers] = useState(workers);
+  const [storesState, setStoresState] = useState(stores);
+  const [workersState, setWorkersState] = useState(workers);
   const [tab, setTab] = useState('stores'); // stores | workers
   const [newStoreName, setNewStoreName] = useState('');
   const [storeError, setStoreError] = useState(null);
   const [addingWorker, setAddingWorker] = useState(false);
-  const [dirty, setDirty] = useState(false);
-  const [savedFlash, setSavedFlash] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(null); // { kind: 'store'|'worker', id, name }
 
-  const storeName = (id) => (tempStores.find((s) => s.id === id) || {}).name || `Store ${id}`;
-  const mainOf = (storeId) => tempWorkers.find((w) => w.main_store_id === storeId) || null;
+  // Mirrors of the latest committed state, so mutators never read a stale
+  // closure when two commits happen back to back.
+  const storesRef = useRef(storesState);
+  storesRef.current = storesState;
+  const workersRef = useRef(workersState);
+  workersRef.current = workersState;
+
+  const storeName = (id) => (storesState.find((s) => s.id === id) || {}).name || `Store ${id}`;
+  const mainOf = (storeId) => workersState.find((w) => w.main_store_id === storeId) || null;
 
   const problems = useMemo(() => {
     const list = [];
-    const storeNames = tempStores.map((s) => norm(s.name));
+    const storeNames = storesState.map((s) => norm(s.name));
     if (storeNames.some((n) => !n)) list.push('Every store needs a name.');
     if (new Set(storeNames).size !== storeNames.length) list.push('Store names must be unique (case doesn’t matter).');
-    const workerNames = tempWorkers.map((w) => norm(w.name));
+    const workerNames = workersState.map((w) => norm(w.name));
     if (workerNames.some((n) => !n)) list.push('Every worker needs a name.');
     if (new Set(workerNames).size !== workerNames.length) list.push('Worker names must be unique (case doesn’t matter).');
-    for (const w of tempWorkers) {
+    for (const w of workersState) {
       if (!w.store_ids || w.store_ids.length === 0) list.push(`${w.name || 'A worker'} isn’t linked to any store.`);
     }
     return list;
-  }, [tempStores, tempWorkers]);
+  }, [storesState, workersState]);
 
-  const staffingShort = tempStores.length > 0 && tempWorkers.length < tempStores.length;
+  const staffingShort = storesState.length > 0 && workersState.length < storesState.length;
+
+  // ---------- the one place that persists ----------
+
+  function commitBoth(nextStores, nextWorkers) {
+    storesRef.current = nextStores;
+    workersRef.current = nextWorkers;
+    setStoresState(nextStores);
+    setWorkersState(nextWorkers);
+    onSave(nextStores, nextWorkers);
+  }
+  const commitStores = (next) => commitBoth(next, workersRef.current);
+  const commitWorkers = (next) => commitBoth(storesRef.current, next);
 
   // ---------- stores ----------
 
   function addStore() {
     const name = newStoreName.trim();
     if (!name) return;
-    if (tempStores.some((s) => norm(s.name) === norm(name))) {
+    if (storesState.some((s) => norm(s.name) === norm(name))) {
       setStoreError(`“${name}” already exists — store names must be unique.`);
       return;
     }
-    const id = Math.max(0, ...tempStores.map((s) => s.id)) + 1;
-    setTempStores([...tempStores, { id, name, ...STORE_DEFAULTS }]);
+    const id = Math.max(0, ...storesState.map((s) => s.id)) + 1;
+    commitStores([...storesState, { id, name, ...STORE_DEFAULTS }]);
     setNewStoreName('');
     setStoreError(null);
-    setDirty(true);
   }
 
-  function patchStore(id, patch) {
-    setTempStores(tempStores.map((s) => (s.id === id ? { ...s, ...patch } : s)));
-    setDirty(true);
+  function renameStore(id, rawName) {
+    const name = rawName.trim();
+    if (!name) return { ok: false, message: 'Store name can’t be empty.' };
+    if (storesState.some((s) => s.id !== id && norm(s.name) === norm(name))) {
+      return { ok: false, message: `“${name}” already exists — store names must be unique.` };
+    }
+    commitStores(storesState.map((s) => (s.id === id ? { ...s, name } : s)));
+    return { ok: true };
   }
 
-  // Tier 1 (§8): deleting a store cascades into links — confirm modal first.
+  function commitStorePatch(id, patch) {
+    commitStores(storesState.map((s) => (s.id === id ? { ...s, ...patch } : s)));
+  }
+
+  // Tier 1 (§8): deleting a store cascades into links — confirm modal first,
+  // then persists immediately.
   function deleteStore(id) {
-    setTempStores(tempStores.filter((s) => s.id !== id));
-    setTempWorkers(
-      tempWorkers.map((w) => ({
-        ...w,
-        store_ids: (w.store_ids || []).filter((sid) => sid !== id),
-        main_store_id: w.main_store_id === id ? null : w.main_store_id,
-      }))
-    );
-    setDirty(true);
+    const nextStores = storesState.filter((s) => s.id !== id);
+    const nextWorkers = workersState.map((w) => ({
+      ...w,
+      store_ids: (w.store_ids || []).filter((sid) => sid !== id),
+      main_store_id: w.main_store_id === id ? null : w.main_store_id,
+    }));
+    commitBoth(nextStores, nextWorkers);
   }
 
   // ---------- workers ----------
 
-  function patchWorker(id, patch) {
-    setTempWorkers(tempWorkers.map((w) => (w.id === id ? { ...w, ...patch } : w)));
-    setDirty(true);
+  function renameWorker(id, rawName) {
+    const name = rawName.trim();
+    if (!name) return { ok: false, message: 'Worker name can’t be empty.' };
+    if (workersState.some((w) => w.id !== id && norm(w.name) === norm(name))) {
+      return { ok: false, message: `“${name}” already exists — worker names must be unique.` };
+    }
+    commitWorkers(workersState.map((w) => (w.id === id ? { ...w, name } : w)));
+    return { ok: true };
+  }
+
+  function commitWorkerPatch(id, patch) {
+    commitWorkers(workersState.map((w) => (w.id === id ? { ...w, ...patch } : w)));
   }
 
   function deleteWorker(id) {
-    setTempWorkers(tempWorkers.filter((w) => w.id !== id));
-    setDirty(true);
+    commitWorkers(workersState.filter((w) => w.id !== id));
   }
 
   function linkStore(worker, storeId) {
     if ((worker.store_ids || []).includes(storeId)) return;
-    patchWorker(worker.id, { store_ids: [...(worker.store_ids || []), storeId] });
+    commitWorkerPatch(worker.id, { store_ids: [...(worker.store_ids || []), storeId] });
   }
 
   // Tier 2 (§8): clearing a link applies immediately with a 5s undo toast.
   function unlinkStore(worker, storeId) {
-    const before = tempWorkers;
+    const before = workersState;
     const ids = (worker.store_ids || []).filter((s) => s !== storeId);
-    patchWorker(worker.id, {
+    const wasLastLink = ids.length === 0;
+    commitWorkerPatch(worker.id, {
       store_ids: ids,
       // Removing the home store demotes a Main to Float.
       main_store_id: worker.main_store_id === storeId ? null : worker.main_store_id,
     });
     if (onToast) {
-      onToast(`Removed ${worker.name}'s link to ${storeName(storeId)}`, () => {
-        setTempWorkers(before);
-        setDirty(true);
-      });
+      onToast(
+        wasLastLink
+          ? `Removed ${worker.name}'s only store link — they can't be scheduled until relinked`
+          : `Removed ${worker.name}'s link to ${storeName(storeId)}`,
+        () => commitWorkers(before)
+      );
     }
   }
 
@@ -121,37 +209,29 @@ export default function SettingsPage({ stores, workers, prompt, onSave, onToast 
     // A Main's home store stays first.
     if (worker.main_store_id != null && (i === 0 || j === 0)) return;
     [ids[i], ids[j]] = [ids[j], ids[i]];
-    patchWorker(worker.id, { store_ids: ids });
+    commitWorkerPatch(worker.id, { store_ids: ids });
   }
 
   function setRole(worker, role) {
     if (role === 'float') {
-      patchWorker(worker.id, { main_store_id: null });
+      commitWorkerPatch(worker.id, { main_store_id: null });
       return;
     }
     const home = (worker.store_ids || [])[0];
     if (home == null) return;
     const taken = mainOf(home);
     if (taken && taken.id !== worker.id) return; // UI disables this, belt and braces
-    patchWorker(worker.id, { main_store_id: home });
+    commitWorkerPatch(worker.id, { main_store_id: home });
   }
 
   function createWorker({ name, storeIds, role }) {
-    if (tempWorkers.some((w) => norm(w.name) === norm(name))) return false;
-    const id = Math.max(0, ...tempWorkers.map((w) => w.id)) + 1;
-    setTempWorkers([
-      ...tempWorkers,
+    if (workersState.some((w) => norm(w.name) === norm(name))) return false;
+    const id = Math.max(0, ...workersState.map((w) => w.id)) + 1;
+    commitWorkers([
+      ...workersState,
       { id, name: name.trim(), store_ids: storeIds, main_store_id: role === 'main' ? storeIds[0] : null, max_workdays: 5 },
     ]);
-    setDirty(true);
     return true;
-  }
-
-  function handleSave() {
-    onSave(tempStores, tempWorkers);
-    setDirty(false);
-    setSavedFlash(true);
-    setTimeout(() => setSavedFlash(false), 2000);
   }
 
   return (
@@ -162,15 +242,15 @@ export default function SettingsPage({ stores, workers, prompt, onSave, onToast 
 
       {staffingShort && (
         <div className="banner banner-bad">
-          Not enough workers: {tempWorkers.length} worker{tempWorkers.length === 1 ? '' : 's'} for {tempStores.length}{' '}
+          Not enough workers: {workersState.length} worker{workersState.length === 1 ? '' : 's'} for {storesState.length}{' '}
           stores. You need at least one worker per store (more is better).
         </div>
       )}
 
       <div className="settings-tabs">
         {[
-          ['stores', `Stores (${tempStores.length})`],
-          ['workers', `Workers (${tempWorkers.length})`],
+          ['stores', `Stores (${storesState.length})`],
+          ['workers', `Workers (${workersState.length})`],
         ].map(([id, label]) => (
           <button key={id} className={`settings-tab ${tab === id ? 'active' : ''}`} onClick={() => setTab(id)}>
             {label}
@@ -201,84 +281,18 @@ export default function SettingsPage({ stores, workers, prompt, onSave, onToast 
           {storeError && <p className="field-error">{storeError}</p>}
 
           <div className="settings-list">
-            {tempStores.map((s) => {
-              const main = mainOf(s.id);
-              return (
-                <div key={s.id} className="settings-worker-card store-card-settings">
-                  <div className="worker-header">
-                    <input
-                      type="text"
-                      className="worker-name"
-                      value={s.name}
-                      onChange={(e) => patchStore(s.id, { name: e.target.value })}
-                    />
-                    <span className="store-row-main">{main ? `Main: ${main.name}` : 'No main worker yet'}</span>
-                    <button
-                      type="button"
-                      className="worker-delete"
-                      title="Delete store"
-                      onClick={() => setConfirmDelete({ kind: 'store', id: s.id, name: s.name })}
-                    >
-                      ✕
-                    </button>
-                  </div>
-
-                  <div className="store-settings-row">
-                    <span className="store-settings-label">Shift mode</span>
-                    <div className="settings-seg shift-mode-seg">
-                      <button
-                        type="button"
-                        className={(s.shift_mode || 'default') === 'default' ? 'active' : ''}
-                        onClick={() => patchStore(s.id, { shift_mode: 'default' })}
-                      >
-                        Default
-                      </button>
-                      <button
-                        type="button"
-                        className={s.shift_mode === 'split_only' ? 'active' : ''}
-                        onClick={() => patchStore(s.id, { shift_mode: 'split_only' })}
-                      >
-                        Split Shift Only
-                      </button>
-                    </div>
-                  </div>
-
-                  <div className="store-settings-row">
-                    <span className="store-settings-label">Weekday hours</span>
-                    <span className="store-hours-pair">
-                      <input
-                        type="time"
-                        value={s.weekday_open || '08:00'}
-                        onChange={(e) => e.target.value && patchStore(s.id, { weekday_open: e.target.value })}
-                      />
-                      –
-                      <input
-                        type="time"
-                        value={s.weekday_close || '22:00'}
-                        onChange={(e) => e.target.value && patchStore(s.id, { weekday_close: e.target.value })}
-                      />
-                    </span>
-                  </div>
-                  <div className="store-settings-row">
-                    <span className="store-settings-label">Weekend hours</span>
-                    <span className="store-hours-pair">
-                      <input
-                        type="time"
-                        value={s.weekend_open || '09:00'}
-                        onChange={(e) => e.target.value && patchStore(s.id, { weekend_open: e.target.value })}
-                      />
-                      –
-                      <input
-                        type="time"
-                        value={s.weekend_close || '22:00'}
-                        onChange={(e) => e.target.value && patchStore(s.id, { weekend_close: e.target.value })}
-                      />
-                    </span>
-                  </div>
-                </div>
-              );
-            })}
-            {tempStores.length === 0 && <p className="settings-hint">No stores yet — add your first one above.</p>}
+            {storesState.map((s) => (
+              <StoreCard
+                key={s.id}
+                store={s}
+                workers={workersState}
+                mainOf={mainOf}
+                onRenameCommit={(name) => renameStore(s.id, name)}
+                onPatch={(patch) => commitStorePatch(s.id, patch)}
+                onDelete={() => setConfirmDelete({ kind: 'store', id: s.id, name: s.name })}
+              />
+            ))}
+            {storesState.length === 0 && <p className="settings-hint">No stores yet — add your first one above.</p>}
           </div>
         </div>
       )}
@@ -291,7 +305,7 @@ export default function SettingsPage({ stores, workers, prompt, onSave, onToast 
             drops with every store further down the list. Each store can have one Main worker.
           </p>
 
-          {tempStores.length === 0 ? (
+          {storesState.length === 0 ? (
             <p className="settings-hint">Add stores first — workers link to stores.</p>
           ) : (
             <>
@@ -300,15 +314,20 @@ export default function SettingsPage({ stores, workers, prompt, onSave, onToast 
               </button>
 
               <div className="settings-list" style={{ marginTop: 12 }}>
-                {tempWorkers.map((w) => (
+                {workersState.map((w) => (
                   <WorkerCard
                     key={w.id}
                     worker={w}
-                    stores={tempStores}
+                    stores={storesState}
                     storeName={storeName}
                     mainOf={mainOf}
-                    onRename={(name) => patchWorker(w.id, { name })}
-                    onAllowance={(days) => patchWorker(w.id, { max_workdays: days })}
+                    onRenameCommit={(name) => renameWorker(w.id, name)}
+                    onAllowanceCommit={(raw) => {
+                      const v = Number(raw);
+                      if (!Number.isFinite(v)) return { ok: false, message: 'Enter a number.' };
+                      commitWorkerPatch(w.id, { max_workdays: Math.max(0.5, Math.min(7, Math.round(v * 2) / 2)) });
+                      return { ok: true };
+                    }}
                     onDelete={() => setConfirmDelete({ kind: 'worker', id: w.id, name: w.name })}
                     onLink={(sid) => linkStore(w, sid)}
                     onUnlink={(sid) => unlinkStore(w, sid)}
@@ -331,11 +350,6 @@ export default function SettingsPage({ stores, workers, prompt, onSave, onToast 
           </ul>
         </div>
       )}
-      <div className="actions">
-        <button type="button" className="btn btn-primary" onClick={handleSave} disabled={problems.length > 0 || !dirty}>
-          {savedFlash ? '✓ Saved' : 'Save setup'}
-        </button>
-      </div>
 
       {confirmDelete && (
         <ConfirmModal
@@ -357,8 +371,8 @@ export default function SettingsPage({ stores, workers, prompt, onSave, onToast 
 
       {addingWorker && (
         <AddWorkerSheet
-          stores={tempStores}
-          workers={tempWorkers}
+          stores={storesState}
+          workers={workersState}
           mainOf={mainOf}
           onCreate={(payload) => {
             if (createWorker(payload)) setAddingWorker(false);
@@ -370,11 +384,102 @@ export default function SettingsPage({ stores, workers, prompt, onSave, onToast 
   );
 }
 
-function WorkerCard({ worker, stores, storeName, mainOf, onRename, onAllowance, onDelete, onLink, onUnlink, onMove, onRole }) {
+function StoreCard({ store, workers, mainOf, onRenameCommit, onPatch, onDelete }) {
+  const main = mainOf(store.id);
+  const nameField = useBlurCommit(store.name, onRenameCommit);
+  const weekdayOpen = useBlurCommit(store.weekday_open || '08:00', (v) => {
+    if (!v) return { ok: false };
+    onPatch({ weekday_open: v });
+    return { ok: true };
+  });
+  const weekdayClose = useBlurCommit(store.weekday_close || '22:00', (v) => {
+    if (!v) return { ok: false };
+    onPatch({ weekday_close: v });
+    return { ok: true };
+  });
+  const weekendOpen = useBlurCommit(store.weekend_open || '09:00', (v) => {
+    if (!v) return { ok: false };
+    onPatch({ weekend_open: v });
+    return { ok: true };
+  });
+  const weekendClose = useBlurCommit(store.weekend_close || '22:00', (v) => {
+    if (!v) return { ok: false };
+    onPatch({ weekend_close: v });
+    return { ok: true };
+  });
+  const linked = linkedWorkersFor(store, workers);
+
+  return (
+    <div className="settings-worker-card store-card-settings">
+      <div className="worker-header">
+        <input type="text" className="worker-name" value={nameField.value} onChange={nameField.onChange} onBlur={nameField.onBlur} />
+        <span className="store-row-main">{main ? `Main: ${main.name}` : 'No main worker yet'}</span>
+        <button type="button" className="worker-delete" title="Delete store" onClick={onDelete}>
+          ✕
+        </button>
+      </div>
+      {nameField.error && <p className="field-error">{nameField.error}</p>}
+
+      <div className="store-settings-row shift-mode-row">
+        <span className="store-settings-label">Shift mode</span>
+        <div className="settings-seg shift-mode-seg">
+          <button
+            type="button"
+            className={(store.shift_mode || 'default') === 'default' ? 'active' : ''}
+            onClick={() => onPatch({ shift_mode: 'default' })}
+          >
+            Default
+          </button>
+          <button
+            type="button"
+            className={store.shift_mode === 'split_only' ? 'active' : ''}
+            onClick={() => onPatch({ shift_mode: 'split_only' })}
+          >
+            Split Shift Only
+          </button>
+        </div>
+      </div>
+
+      <div className="store-settings-row">
+        <span className="store-settings-label">Weekday hours</span>
+        <span className="store-hours-pair">
+          <input type="time" value={weekdayOpen.value} onChange={weekdayOpen.onChange} onBlur={weekdayOpen.onBlur} />
+          –
+          <input type="time" value={weekdayClose.value} onChange={weekdayClose.onChange} onBlur={weekdayClose.onBlur} />
+        </span>
+      </div>
+      <div className="store-settings-row">
+        <span className="store-settings-label">Weekend hours</span>
+        <span className="store-hours-pair">
+          <input type="time" value={weekendOpen.value} onChange={weekendOpen.onChange} onBlur={weekendOpen.onBlur} />
+          –
+          <input type="time" value={weekendClose.value} onChange={weekendClose.onChange} onBlur={weekendClose.onBlur} />
+        </span>
+      </div>
+
+      <div className="store-settings-row store-linked-workers">
+        <span className="store-settings-label">Linked workers</span>
+        <ol className="store-linked-worker-list">
+          {linked.length === 0 && <li className="store-linked-worker-empty">No workers linked yet</li>}
+          {linked.map((entry, i) => (
+            <li key={entry.worker.id}>
+              {i + 1}. {entry.worker.name}
+              {entry.isMain ? ' (Main)' : ''}
+            </li>
+          ))}
+        </ol>
+      </div>
+    </div>
+  );
+}
+
+function WorkerCard({ worker, stores, storeName, mainOf, onRenameCommit, onAllowanceCommit, onDelete, onLink, onUnlink, onMove, onRole }) {
   const ids = worker.store_ids || [];
   const home = ids[0];
   const homeMain = home != null ? mainOf(home) : null;
   const mainBlocked = home == null || (homeMain && homeMain.id !== worker.id);
+  const nameField = useBlurCommit(worker.name, onRenameCommit);
+  const allowanceField = useBlurCommit(worker.max_workdays != null ? String(worker.max_workdays) : '5', onAllowanceCommit);
 
   return (
     <div className="settings-worker-card">
@@ -382,9 +487,10 @@ function WorkerCard({ worker, stores, storeName, mainOf, onRename, onAllowance, 
         <input
           type="text"
           className="worker-name"
-          value={worker.name}
+          value={nameField.value}
           placeholder="Worker name"
-          onChange={(e) => onRename(e.target.value)}
+          onChange={nameField.onChange}
+          onBlur={nameField.onBlur}
         />
         <span className={`chip chip-${worker.main_store_id != null ? 'main' : 'float'}`}>
           {worker.main_store_id != null ? `Main · ${storeName(worker.main_store_id)}` : 'Float'}
@@ -393,6 +499,7 @@ function WorkerCard({ worker, stores, storeName, mainOf, onRename, onAllowance, 
           ✕
         </button>
       </div>
+      {nameField.error && <p className="field-error">{nameField.error}</p>}
 
       <div className="store-settings-row">
         <span className="store-settings-label">Max workdays/week</span>
@@ -402,14 +509,12 @@ function WorkerCard({ worker, stores, storeName, mainOf, onRename, onAllowance, 
           min="0.5"
           max="7"
           step="0.5"
-          value={worker.max_workdays != null ? worker.max_workdays : 5}
-          onChange={(e) => {
-            const v = Number(e.target.value);
-            if (Number.isFinite(v)) onAllowance(Math.max(0.5, Math.min(7, Math.round(v * 2) / 2)));
-          }}
+          value={allowanceField.value}
+          onChange={allowanceField.onChange}
+          onBlur={allowanceField.onBlur}
         />
-        <small className="settings-hint-inline">Full day = 1 · split day = 0.5</small>
       </div>
+      {allowanceField.error && <p className="field-error">{allowanceField.error}</p>}
 
       {ids.length > 0 && (
         <div className="settings-seg role-seg">

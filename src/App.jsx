@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   generateSchedule,
   computeViolations,
@@ -46,8 +46,17 @@ const sameVersion = (a, b) =>
   !!b &&
   JSON.stringify([a.schedule, a.splitTimes, a.leaves]) === JSON.stringify([b.schedule, b.splitTimes, b.leaves]);
 
+// No more Home screen — land wherever is most useful: an existing/previewed
+// schedule first, otherwise Settings if setup isn't ready yet, otherwise
+// straight into building the first schedule.
+function pickLandingRoute(stores, workers, weeksList, viewing) {
+  const ready = stores.length > 0 && workers.length > 0 && workers.length >= stores.length;
+  if (weeksList.length || viewing) return 'viewer';
+  if (!ready) return 'settings';
+  return 'wizard';
+}
+
 export default function App() {
-  const [route, setRoute] = useState('home'); // home | wizard | viewer | settings
   const [navOpen, setNavOpen] = useState(false);
 
   // Without cloud keys the app is local-only — start from the default seed
@@ -55,6 +64,7 @@ export default function App() {
   const [stores, setStores] = useState(() => (cloud.enabled ? [] : seedStores()));
   const [workers, setWorkers] = useState(() => (cloud.enabled ? [] : seedWorkers()));
   const [weeksList, setWeeksList] = useState([]);
+  const [route, setRoute] = useState(() => pickLandingRoute(stores, workers, weeksList, null)); // wizard | viewer | settings | history
   const [loading, setLoading] = useState(cloud.enabled);
   const [cloudStatus, setCloudStatus] = useState(cloud.enabled ? 'idle' : 'off');
   const [overlay, setOverlay] = useState(null); // 'diag' | null
@@ -99,6 +109,7 @@ export default function App() {
         setStores(st);
         setWorkers(wk);
         setWeeksList(weeks);
+        setRoute(pickLandingRoute(st, wk, weeks, null));
         setCloudStatus('saved');
       } catch (e) {
         console.error(e);
@@ -109,11 +120,17 @@ export default function App() {
     })();
   }, []);
 
+  // Serialized so that several instant-saves fired close together (e.g.
+  // tabbing through Settings fields) run their delete-and-reinsert requests
+  // strictly in order instead of racing/interleaving.
+  const saveQueueRef = useRef(Promise.resolve());
   async function withSave(fn) {
     if (!cloud.enabled) return;
     setCloudStatus('saving');
+    const run = saveQueueRef.current.then(fn);
+    saveQueueRef.current = run.catch(() => {});
     try {
-      await fn();
+      await run;
       setCloudStatus('saved');
     } catch (e) {
       console.error(e);
@@ -130,6 +147,12 @@ export default function App() {
     setNavOpen(false);
     setPrintMode(null); // leaving via the sidebar exits print mode too, not just the route
     if (nextRoute !== 'settings') setSettingsPrompt(null);
+  }
+
+  // Where "Cancel"/"leave this screen" actions land now that there's no Home
+  // to return to: an existing schedule if there is one, otherwise Settings.
+  function leaveTo() {
+    return weeksList.length || viewing ? 'viewer' : 'settings';
   }
 
   // A wizard past step 0 has real, unsaved work (leaves/locks/a generated
@@ -507,7 +530,6 @@ export default function App() {
   }[cloudStatus];
 
   const navItems = [
-    { id: 'home', label: 'Home', icon: '🏠' },
     { id: 'wizard', label: 'New schedule', icon: '📅', onClick: startNewSchedule },
     { id: 'viewer', label: 'Current Schedule', icon: '🗂', onClick: viewCurrent, disabled: !weeksList.length && !viewing },
     { id: 'history', label: 'History', icon: '📜', onClick: () => go('history'), disabled: weeksList.length < 2 },
@@ -578,37 +600,6 @@ export default function App() {
             />
           ) : (
             <>
-              {route === 'home' && (
-                <div className="home">
-                  <h1 className="home-title">What would you like to do?</h1>
-                  <div className="home-cards">
-                    <button
-                      type="button"
-                      className="home-card"
-                      disabled={!weeksList.length && !viewing}
-                      onClick={viewCurrent}
-                    >
-                      <span className="home-card-icon" aria-hidden>🗂</span>
-                      <span className="home-card-title">View current schedule</span>
-                      <span className="home-card-sub">
-                        {weeksList.length
-                          ? `Week of ${formatWeek(weeksList[0].week_start)}`
-                          : 'Nothing saved yet'}
-                      </span>
-                    </button>
-                    <button type="button" className="home-card home-card-primary" onClick={startNewSchedule}>
-                      <span className="home-card-icon" aria-hidden>✏️</span>
-                      <span className="home-card-title">Create new schedule</span>
-                      <span className="home-card-sub">
-                        {setupReady
-                          ? 'Pick a week, set leave & locks, review, save'
-                          : 'Set up stores & workers first — we’ll take you there'}
-                      </span>
-                    </button>
-                  </div>
-                </div>
-              )}
-
               {route === 'settings' && (
                 <SettingsPage
                   stores={stores}
@@ -702,9 +693,6 @@ export default function App() {
                     onToast={showToast}
                   />
                   <div className="actions">
-                    <button type="button" className="btn btn-ghost" onClick={() => go('home')}>
-                      Back to home
-                    </button>
                     <button type="button" className="btn" onClick={() => setPrintMode('worker')}>
                       Print by worker
                     </button>
@@ -784,7 +772,7 @@ export default function App() {
                         </label>
                       </div>
                       <div className="actions">
-                        <button type="button" className="btn btn-ghost" onClick={() => go('home')}>
+                        <button type="button" className="btn btn-ghost" onClick={() => go(leaveTo())}>
                           Cancel
                         </button>
                         <button type="button" className="btn btn-primary" onClick={nextFromDate}>

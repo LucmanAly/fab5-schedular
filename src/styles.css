@@ -504,11 +504,19 @@ button.cell:not(:disabled):active { filter: brightness(0.95); }
 .worker-delete {
   background: none;
   border: none;
-  color: var(--gap);
+  color: var(--muted);
   font-size: 16px;
   cursor: pointer;
-  padding: 4px;
+  padding: 6px 10px;
   min-width: 28px;
+  margin-left: 10px;
+  border-radius: 6px;
+  transition: background 0.15s, color 0.15s;
+}
+.worker-delete:hover,
+.worker-delete:focus-visible {
+  background: var(--gap-tint);
+  color: var(--gap);
 }
 
 .worker-store-links {
@@ -764,33 +772,6 @@ button.cell:not(:disabled):active { filter: brightness(0.95); }
   .main { flex: 1; min-width: 0; }
 }
 
-/* ---------- landing page ---------- */
-.home { padding-top: 6vh; text-align: center; }
-.home-title { font-family: var(--display); font-size: 30px; font-weight: 600; margin: 0 0 24px; }
-.home-cards { display: flex; flex-direction: column; gap: 14px; max-width: 680px; margin: 0 auto; }
-.home-card {
-  background: var(--panel);
-  border: 1px solid var(--line);
-  border-radius: 12px;
-  padding: 26px 20px;
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  align-items: center;
-  font: inherit;
-  box-shadow: 0 1px 3px rgba(23, 34, 43, 0.06);
-}
-.home-card:hover:not(:disabled) { border-color: var(--main); }
-.home-card:disabled { opacity: 0.55; }
-.home-card-primary { border-color: var(--board); background: var(--board); color: #fff; }
-.home-card-icon { font-size: 30px; }
-.home-card-title { font-family: var(--display); font-size: 22px; font-weight: 700; letter-spacing: 0.5px; }
-.home-card-sub { color: var(--muted); font-size: 14px; }
-.home-card-primary .home-card-sub { color: #b8cbdd; }
-@media (min-width: 720px) {
-  .home-cards { flex-direction: row; align-items: stretch; }
-  .home-card { flex: 1; }
-}
 
 /* ---------- violation decision box ---------- */
 .violation-box {
@@ -862,12 +843,27 @@ button.cell:not(:disabled):active { filter: brightness(0.95); }
 /* ---------- store settings cards ---------- */
 .store-settings-row { display: flex; align-items: center; gap: 10px; margin-top: 10px; flex-wrap: wrap; }
 .store-settings-label { font-size: 12px; font-weight: 700; letter-spacing: 0.4px; text-transform: uppercase; color: var(--muted); min-width: 130px; }
+.shift-mode-row .store-settings-label { min-width: 0; margin-right: 2px; }
+.shift-mode-row .shift-mode-seg { margin: 0; }
 .store-hours-pair { display: inline-flex; align-items: center; gap: 6px; color: var(--muted); }
 .store-hours-pair input[type='time'] { padding: 6px 8px; border: 1px solid var(--line); border-radius: 6px; font: inherit; }
 .store-row-main { font-size: 12px; color: var(--muted); white-space: nowrap; }
 .allowance-input { width: 76px; padding: 6px 8px; border: 1px solid var(--line); border-radius: 6px; font: inherit; }
 .settings-hint-inline { color: var(--muted); font-size: 12px; }
 .chip-split { background: #eef2f6; color: var(--accent); }
+
+.store-linked-workers { align-items: flex-start; }
+.store-linked-worker-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-size: 13px;
+  color: var(--ink);
+}
+.store-linked-worker-empty { color: var(--muted); font-size: 13px; font-style: italic; }
 
 /* ---------- schedule board extras ---------- */
 .store-card-hours { font-size: 11px; font-weight: 500; color: var(--muted); margin-left: 8px; text-transform: none; letter-spacing: 0; }
