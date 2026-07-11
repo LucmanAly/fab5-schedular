@@ -8,7 +8,7 @@ export const enabled = Boolean(URL && KEY);
 
 // Only the two most recent saved weeks are kept; saving a new week
 // automatically evicts the oldest.
-export const WEEKS_KEPT = 2;
+export const WEEKS_KEPT = 3;
 
 // Legacy anon keys are JWTs (start with "eyJ") and go in the Authorization header.
 // New publishable keys (sb_publishable_...) authenticate via the apikey header only.

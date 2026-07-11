@@ -61,6 +61,7 @@ export default function App() {
   const [printMode, setPrintMode] = useState(null);
   const [settingsPrompt, setSettingsPrompt] = useState(null);
   const [toast, setToast] = useState(null); // Tier-2 undo toast (§8): { message, undo }
+  const [navConfirm, setNavConfirm] = useState(null); // pending nav action, if the wizard has unsaved progress
 
   // Wizard state
   const [wStep, setWStep] = useState(0);
@@ -127,7 +128,17 @@ export default function App() {
   function go(nextRoute) {
     setRoute(nextRoute);
     setNavOpen(false);
+    setPrintMode(null); // leaving via the sidebar exits print mode too, not just the route
     if (nextRoute !== 'settings') setSettingsPrompt(null);
+  }
+
+  // A wizard past step 0 has real, unsaved work (leaves/locks/a generated
+  // schedule). Leaving via the sidebar without saving would silently discard
+  // it, so those navigations get routed through this instead of `go`/onClick
+  // directly.
+  function guardedNav(action) {
+    if (route === 'wizard' && wStep > 0) setNavConfirm(() => action);
+    else action();
   }
 
   // ---------- landing actions ----------
@@ -194,7 +205,7 @@ export default function App() {
     }
   }
 
-  function viewLast() {
+  function viewCurrent() {
     if (weeksList.length) openWeek(weeksList[0].week_start);
     else if (viewing) go('viewer');
   }
@@ -498,13 +509,13 @@ export default function App() {
   const navItems = [
     { id: 'home', label: 'Home', icon: '🏠' },
     { id: 'wizard', label: 'New schedule', icon: '📅', onClick: startNewSchedule },
-    { id: 'viewer', label: 'Last schedule', icon: '🗂', onClick: viewLast, disabled: !weeksList.length && !viewing },
+    { id: 'viewer', label: 'Current Schedule', icon: '🗂', onClick: viewCurrent, disabled: !weeksList.length && !viewing },
+    { id: 'history', label: 'History', icon: '📜', onClick: () => go('history'), disabled: weeksList.length < 2 },
     { id: 'settings', label: 'Settings', icon: '⚙️' },
   ];
 
   return (
-    <>
-      <div className="app shell">
+    <div className="app shell">
         <header className="topbar mobile-only">
           <button type="button" className="nav-burger" aria-label="Menu" onClick={() => setNavOpen(!navOpen)}>
             ☰
@@ -529,7 +540,7 @@ export default function App() {
                 type="button"
                 className={`sidenav-item ${route === item.id ? 'active' : ''}`}
                 disabled={item.disabled}
-                onClick={() => (item.onClick ? item.onClick() : go(item.id))}
+                onClick={() => guardedNav(item.onClick ? item.onClick : () => go(item.id))}
               >
                 <span className="sidenav-icon" aria-hidden>{item.icon}</span>
                 {item.label}
@@ -553,6 +564,18 @@ export default function App() {
             <div className="panel">
               <p className="hint">Loading your saved setup…</p>
             </div>
+          ) : printMode && viewing ? (
+            <PrintOverlay
+              mode={printMode}
+              weekStart={viewing.weekStart}
+              stores={stores}
+              workers={workers}
+              schedule={viewing.schedule || {}}
+              leaves={viewing.leaves || {}}
+              labels={dayLabels(viewing.weekStart)}
+              splitTimes={viewing.splitTimes || {}}
+              onClose={() => setPrintMode(null)}
+            />
           ) : (
             <>
               {route === 'home' && (
@@ -563,10 +586,10 @@ export default function App() {
                       type="button"
                       className="home-card"
                       disabled={!weeksList.length && !viewing}
-                      onClick={viewLast}
+                      onClick={viewCurrent}
                     >
                       <span className="home-card-icon" aria-hidden>🗂</span>
-                      <span className="home-card-title">View last generated schedule</span>
+                      <span className="home-card-title">View current schedule</span>
                       <span className="home-card-sub">
                         {weeksList.length
                           ? `Week of ${formatWeek(weeksList[0].week_start)}`
@@ -591,11 +614,29 @@ export default function App() {
                   stores={stores}
                   workers={workers}
                   prompt={settingsPrompt}
-                  weeksList={weeksList}
-                  onOpenWeek={openWeek}
                   onSave={handleSaveSettings}
                   onToast={showToast}
                 />
+              )}
+
+              {route === 'history' && (
+                <div className="panel settings-section">
+                  <h1 className="page-title">History</h1>
+                  <p className="settings-hint">
+                    The two weeks before your current schedule. Tap one to view or edit it.
+                  </p>
+                  {weeksList.slice(1).length === 0 && <p className="settings-hint">Nothing here yet.</p>}
+                  <ul className="picker">
+                    {weeksList.slice(1).map((w) => (
+                      <li key={w.week_start}>
+                        <button type="button" className="pick pick-row" onClick={() => openWeek(w.week_start)}>
+                          <span className="pick-name">Week of {formatWeek(w.week_start)}</span>
+                          <span className="pick-status">view</span>
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
               )}
 
               {route === 'viewer' && viewing && (
@@ -604,29 +645,6 @@ export default function App() {
                     <span>
                       Week of {formatWeek(viewing.weekStart)} —{' '}
                       {viewing.dirty ? 'edited (unsaved)' : previewingOld ? 'previewing' : 'saved'}
-                    </span>
-                    <span className="version-nav">
-                      {viewing.idx > 0 && (
-                        <button
-                          type="button"
-                          className="version-arrow"
-                          aria-label="Earlier version"
-                          onClick={() => gotoVersion(viewing.idx - 1)}
-                        >
-                          ◄
-                        </button>
-                      )}
-                      <span className="version-label">v{viewing.idx}</span>
-                      {viewing.idx < viewing.versions.length - 1 && (
-                        <button
-                          type="button"
-                          className="version-arrow"
-                          aria-label="Later version"
-                          onClick={() => gotoVersion(viewing.idx + 1)}
-                        >
-                          ►
-                        </button>
-                      )}
                     </span>
                   </div>
 
@@ -693,6 +711,29 @@ export default function App() {
                     <button type="button" className="btn" onClick={() => setPrintMode('store')}>
                       Print by store
                     </button>
+                    <span className="version-nav">
+                      {viewing.idx > 0 && (
+                        <button
+                          type="button"
+                          className="version-arrow"
+                          aria-label="Earlier version"
+                          onClick={() => gotoVersion(viewing.idx - 1)}
+                        >
+                          ◄
+                        </button>
+                      )}
+                      <span className="version-label">v{viewing.idx}</span>
+                      {viewing.idx < viewing.versions.length - 1 && (
+                        <button
+                          type="button"
+                          className="version-arrow"
+                          aria-label="Later version"
+                          onClick={() => gotoVersion(viewing.idx + 1)}
+                        >
+                          ►
+                        </button>
+                      )}
+                    </span>
                     {(viewing.dirty || previewingOld) && (
                       <button type="button" className="btn btn-primary" onClick={() => saveViewer()}>
                         {viewing.dirty ? '✓ Save changes' : `✓ Publish v${viewing.idx}`}
@@ -923,6 +964,20 @@ export default function App() {
           />
         )}
 
+        {navConfirm && (
+          <ConfirmModal
+            title="Leave without saving?"
+            body="This schedule hasn't been saved yet — leaving now discards everything you've entered."
+            confirmLabel="Leave without saving"
+            onCancel={() => setNavConfirm(null)}
+            onConfirm={() => {
+              const run = navConfirm;
+              setNavConfirm(null);
+              run();
+            }}
+          />
+        )}
+
         <UndoToast
           toast={toast}
           onUndo={() => {
@@ -932,22 +987,7 @@ export default function App() {
           onExpire={() => setToast(null)}
         />
       </div>
-
-      {printMode && viewing && (
-        <PrintOverlay
-          mode={printMode}
-          weekStart={viewing.weekStart}
-          stores={stores}
-          workers={workers}
-          schedule={viewing.schedule || {}}
-          leaves={viewing.leaves || {}}
-          labels={dayLabels(viewing.weekStart)}
-          splitTimes={viewing.splitTimes || {}}
-          onClose={() => setPrintMode(null)}
-        />
-      )}
-    </>
-  );
+    );
 }
 
 function ViolationBox({ title, violations, stores, workers, exhausted, actions }) {

@@ -1,5 +1,4 @@
 import { useMemo, useRef, useState } from 'react';
-import { formatWeek } from '../lib/scheduler';
 import { ConfirmModal } from './Overlays';
 
 // Settings is a full page reached from the sidebar.
@@ -16,10 +15,10 @@ const STORE_DEFAULTS = {
   weekend_close: '22:00',
 };
 
-export default function SettingsPage({ stores, workers, prompt, weeksList, onOpenWeek, onSave, onToast }) {
+export default function SettingsPage({ stores, workers, prompt, onSave, onToast }) {
   const [tempStores, setTempStores] = useState(stores);
   const [tempWorkers, setTempWorkers] = useState(workers);
-  const [tab, setTab] = useState('stores'); // stores | workers | history
+  const [tab, setTab] = useState('stores'); // stores | workers
   const [newStoreName, setNewStoreName] = useState('');
   const [storeError, setStoreError] = useState(null);
   const [addingWorker, setAddingWorker] = useState(false);
@@ -172,7 +171,6 @@ export default function SettingsPage({ stores, workers, prompt, weeksList, onOpe
         {[
           ['stores', `Stores (${tempStores.length})`],
           ['workers', `Workers (${tempWorkers.length})`],
-          ['history', 'History'],
         ].map(([id, label]) => (
           <button key={id} className={`settings-tab ${tab === id ? 'active' : ''}`} onClick={() => setTab(id)}>
             {label}
@@ -324,42 +322,20 @@ export default function SettingsPage({ stores, workers, prompt, weeksList, onOpe
         </div>
       )}
 
-      {tab === 'history' && (
-        <div className="panel settings-section">
-          <h3 className="settings-section-title">Schedule history</h3>
-          <p className="settings-hint">The two most recent saved weeks are kept. Saving a new week replaces the oldest.</p>
-          {weeksList.length === 0 && <p className="settings-hint">Nothing saved yet.</p>}
-          <ul className="picker">
-            {weeksList.map((w) => (
-              <li key={w.week_start}>
-                <button type="button" className="pick pick-row" onClick={() => onOpenWeek(w.week_start)}>
-                  <span className="pick-name">Week of {formatWeek(w.week_start)}</span>
-                  <span className="pick-status">view</span>
-                </button>
-              </li>
+      {problems.length > 0 && (
+        <div className="banner banner-bad">
+          <ul className="violation-list">
+            {problems.map((p) => (
+              <li key={p}>{p}</li>
             ))}
           </ul>
         </div>
       )}
-
-      {tab !== 'history' && (
-        <>
-          {problems.length > 0 && (
-            <div className="banner banner-bad">
-              <ul className="violation-list">
-                {problems.map((p) => (
-                  <li key={p}>{p}</li>
-                ))}
-              </ul>
-            </div>
-          )}
-          <div className="actions">
-            <button type="button" className="btn btn-primary" onClick={handleSave} disabled={problems.length > 0 || !dirty}>
-              {savedFlash ? '✓ Saved' : 'Save setup'}
-            </button>
-          </div>
-        </>
-      )}
+      <div className="actions">
+        <button type="button" className="btn btn-primary" onClick={handleSave} disabled={problems.length > 0 || !dirty}>
+          {savedFlash ? '✓ Saved' : 'Save setup'}
+        </button>
+      </div>
 
       {confirmDelete && (
         <ConfirmModal

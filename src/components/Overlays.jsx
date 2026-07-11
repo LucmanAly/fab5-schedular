@@ -55,8 +55,8 @@ export function SaveSheet({ weekStart, openSlots, saving, onSave, onCancel }) {
         <div className="sheet-grab" />
         <h3>Save this schedule?</h3>
         <p className="hint">
-          Saving commits the week of {formatWeek(weekStart)}, enables printing, and archives it. Only the two most
-          recent weeks are kept — saving replaces the oldest.
+          Saving commits the week of {formatWeek(weekStart)}, enables printing, and archives it. This becomes your
+          Current Schedule; the two weeks before it stay in History. Saving replaces the oldest.
         </p>
         {openSlots > 0 && (
           <p className="hint" style={{ color: 'var(--gap)', fontWeight: 600 }}>
