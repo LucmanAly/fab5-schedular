@@ -48,7 +48,7 @@ export default function ScheduleView({
   onToast,
 }) {
   const [mode, setMode] = useState(() =>
-    typeof window !== 'undefined' && window.innerWidth < 720 ? 'day' : 'week'
+    typeof window !== 'undefined' && window.innerWidth < 768 ? 'day' : 'week'
   );
   const [group, setGroup] = useState('store'); // store | worker
   const [activeDay, setActiveDay] = useState(0);

@@ -115,7 +115,8 @@ export default function FindCover({
           <>
             <p className="hint">
               Covering <strong>{who.name}</strong> ({halvesLabel}). {who.name}&rsquo;s day will be recorded as leave.
-              Confirm with the person before tapping — applying re-saves the schedule.
+              Applying lands on the board as an unsaved edit — make as many changes as you need, then save once to
+              publish them as a new version.
             </p>
 
             {result.candidates.length === 0 && (

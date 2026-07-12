@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   generateSchedule,
   computeViolations,
@@ -47,8 +47,11 @@ const sameVersion = (a, b) =>
   JSON.stringify([a.schedule, a.splitTimes, a.leaves]) === JSON.stringify([b.schedule, b.splitTimes, b.leaves]);
 
 export default function App() {
-  const [route, setRoute] = useState('home'); // home | wizard | viewer | settings
+  // 'boot' resolves to the most useful screen once data is in: current
+  // schedule if one exists, otherwise the wizard, otherwise settings.
+  const [route, setRoute] = useState('boot'); // boot | wizard | viewer | history | settings
   const [navOpen, setNavOpen] = useState(false);
+  const [pendingNav, setPendingNav] = useState(null); // wizard exit guard: () => void
 
   // Without cloud keys the app is local-only — start from the default seed
   // setup instead of an empty one.
@@ -78,13 +81,17 @@ export default function App() {
   // Viewer state — a saved week, editable (v4): version stack + Find Cover.
   const [viewing, setViewing] = useState(null);
   // { weekStart, leaves, locks, schedule, splitTimes, versions, idx, dirty, lastWeekLoad }
-  const [viewConflict, setViewConflict] = useState(null); // { prev, prevLeaves, added, thenSave }
+  const [viewConflict, setViewConflict] = useState(null); // { prev, prevLeaves, added }
 
   const setupReady = stores.length > 0 && workers.length > 0 && workers.length >= stores.length;
   const labels = useMemo(() => dayLabels(wiz.weekStart), [wiz.weekStart]);
 
   useEffect(() => {
-    if (!cloud.enabled) return;
+    if (!cloud.enabled) {
+      // Local-only: land on the wizard (or settings if the seed is incomplete).
+      startNewSchedule();
+      return;
+    }
     (async () => {
       try {
         let [{ stores: st, workers: wk }, weeks] = await Promise.all([cloud.loadSetup(), cloud.listWeeks()]);
@@ -99,25 +106,51 @@ export default function App() {
         setWorkers(wk);
         setWeeksList(weeks);
         setCloudStatus('saved');
+        // Land on the most useful screen (no Home page): current schedule
+        // when one exists, else the wizard, else settings with guidance.
+        if (weeks.length) {
+          const ok = await openWeek(weeks[0].week_start, weeks);
+          if (!ok) setRoute('settings');
+        } else if (st.length > 0 && wk.length >= st.length) {
+          setWiz(emptyWizard());
+          setWStep(0);
+          setRoute('wizard');
+        } else {
+          setSettingsPrompt(
+            st.length === 0
+              ? 'Add your stores first, then add workers and link them to stores. After that you can create a schedule.'
+              : 'Add your workers and link them to stores. After that you can create a schedule.'
+          );
+          setRoute('settings');
+        }
       } catch (e) {
         console.error(e);
         setCloudStatus('error');
+        setRoute('settings');
       } finally {
         setLoading(false);
       }
     })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  async function withSave(fn) {
-    if (!cloud.enabled) return;
+  // Settings edits now save on every interaction (blur/click), so saves are
+  // serialized through a promise chain — saveSetup is delete-then-reinsert,
+  // and two of those interleaving would corrupt the tables.
+  const saveChain = useRef(Promise.resolve());
+  function withSave(fn) {
+    if (!cloud.enabled) return Promise.resolve();
     setCloudStatus('saving');
-    try {
-      await fn();
-      setCloudStatus('saved');
-    } catch (e) {
-      console.error(e);
-      setCloudStatus('error');
-    }
+    saveChain.current = saveChain.current.then(async () => {
+      try {
+        await fn();
+        setCloudStatus('saved');
+      } catch (e) {
+        console.error(e);
+        setCloudStatus('error');
+      }
+    });
+    return saveChain.current;
   }
 
   function showToast(message, undo) {
@@ -127,7 +160,19 @@ export default function App() {
   function go(nextRoute) {
     setRoute(nextRoute);
     setNavOpen(false);
+    setPrintMode(null);
     if (nextRoute !== 'settings') setSettingsPrompt(null);
+  }
+
+  // Sidebar navigation runs through this guard: leaving the wizard past step 0
+  // means unsaved progress, so confirm before discarding it.
+  function guardNav(action) {
+    if (route === 'wizard' && wStep > 0) {
+      setNavOpen(false);
+      setPendingNav(() => action);
+    } else {
+      action();
+    }
   }
 
   // ---------- landing actions ----------
@@ -155,14 +200,14 @@ export default function App() {
     go('wizard');
   }
 
-  async function openWeek(weekStart) {
-    if (!cloud.enabled) return;
+  async function openWeek(weekStart, list = weeksList) {
+    if (!cloud.enabled) return false;
     try {
       const data = await cloud.loadWeek(weekStart);
       if (data) {
         // Streak context for edits: the week immediately before this one.
         let lastWeekLoad = {};
-        const prior = weeksList.find((w) => w.week_start < weekStart);
+        const prior = list.find((w) => w.week_start < weekStart);
         if (prior) {
           try {
             const pdata = await cloud.loadWeek(prior.week_start);
@@ -187,14 +232,17 @@ export default function App() {
         });
         setViewConflict(null);
         go('viewer');
+        return true;
       }
+      return false;
     } catch (e) {
       console.error(e);
       setCloudStatus('error');
+      return false;
     }
   }
 
-  function viewLast() {
+  function viewCurrent() {
     if (weeksList.length) openWeek(weeksList[0].week_start);
     else if (viewing) go('viewer');
   }
@@ -464,7 +512,10 @@ export default function App() {
     });
   }
 
-  // Find Cover direct/chain apply (§7): swap in, record leave, re-check, re-save.
+  // Find Cover direct/chain apply (§7): swap in, record leave, re-check.
+  // Applies as an UNSAVED edit like any manual change — a version is minted
+  // only by an explicit Save, so any number of cover swaps, reassignments and
+  // split edits batch into one new version when the admin saves.
   function applyCover({ schedule: nextSched, leaves: nextLeaves, description }) {
     const v = viewing;
     const ctx = { stores, workers, locks: v.locks, leaves: v.leaves, splitTimes: v.splitTimes };
@@ -472,14 +523,12 @@ export default function App() {
     const added = computeViolations(nextSched, { ...ctx, leaves: nextLeaves }).filter(
       (x) => !beforeKeys.has(violationKey(x))
     );
-    const nextView = { ...v, schedule: nextSched, leaves: nextLeaves, dirty: true };
-    setViewing(nextView);
+    setViewing({ ...v, schedule: nextSched, leaves: nextLeaves, dirty: true });
     if (added.length) {
       // P1–P5 break → warn + confirm before it lands (P6–P9 never get here).
-      setViewConflict({ prev: v.schedule, prevLeaves: v.leaves, added, thenSave: true });
+      setViewConflict({ prev: v.schedule, prevLeaves: v.leaves, added });
     } else {
-      showToast(`Applied: ${description}`);
-      saveViewer(nextView);
+      showToast(`Applied: ${description} — save to publish`);
     }
   }
 
@@ -495,11 +544,29 @@ export default function App() {
     error: ['badge-error', 'Cloud error'],
   }[cloudStatus];
 
+  const currentWeekStart = weeksList.length ? weeksList[0].week_start : null;
+  const isViewingCurrent = viewing && (currentWeekStart == null || viewing.weekStart === currentWeekStart);
+  const olderWeeks = weeksList.slice(1);
+
   const navItems = [
-    { id: 'home', label: 'Home', icon: '🏠' },
-    { id: 'wizard', label: 'New schedule', icon: '📅', onClick: startNewSchedule },
-    { id: 'viewer', label: 'Last schedule', icon: '🗂', onClick: viewLast, disabled: !weeksList.length && !viewing },
-    { id: 'settings', label: 'Settings', icon: '⚙️' },
+    { id: 'wizard', label: 'New schedule', icon: '📅', onClick: startNewSchedule, active: route === 'wizard' },
+    {
+      id: 'current',
+      label: 'Current schedule',
+      icon: '🗂',
+      onClick: viewCurrent,
+      disabled: !weeksList.length && !viewing,
+      active: route === 'viewer' && isViewingCurrent,
+    },
+    {
+      id: 'history',
+      label: 'History',
+      icon: '🕘',
+      onClick: () => go('history'),
+      disabled: olderWeeks.length === 0,
+      active: route === 'history' || (route === 'viewer' && !!viewing && !isViewingCurrent),
+    },
+    { id: 'settings', label: 'Settings', icon: '⚙️', onClick: () => go('settings'), active: route === 'settings' },
   ];
 
   return (
@@ -527,9 +594,9 @@ export default function App() {
               <button
                 key={item.id}
                 type="button"
-                className={`sidenav-item ${route === item.id ? 'active' : ''}`}
+                className={`sidenav-item ${item.active ? 'active' : ''}`}
                 disabled={item.disabled}
-                onClick={() => (item.onClick ? item.onClick() : go(item.id))}
+                onClick={() => guardNav(item.onClick)}
               >
                 <span className="sidenav-icon" aria-hidden>{item.icon}</span>
                 {item.label}
@@ -549,40 +616,34 @@ export default function App() {
         </aside>
 
         <main className="main">
-          {loading ? (
+          {loading || route === 'boot' ? (
             <div className="panel">
               <p className="hint">Loading your saved setup…</p>
             </div>
           ) : (
             <>
-              {route === 'home' && (
-                <div className="home">
-                  <h1 className="home-title">What would you like to do?</h1>
-                  <div className="home-cards">
-                    <button
-                      type="button"
-                      className="home-card"
-                      disabled={!weeksList.length && !viewing}
-                      onClick={viewLast}
-                    >
-                      <span className="home-card-icon" aria-hidden>🗂</span>
-                      <span className="home-card-title">View last generated schedule</span>
-                      <span className="home-card-sub">
-                        {weeksList.length
-                          ? `Week of ${formatWeek(weeksList[0].week_start)}`
-                          : 'Nothing saved yet'}
-                      </span>
-                    </button>
-                    <button type="button" className="home-card home-card-primary" onClick={startNewSchedule}>
-                      <span className="home-card-icon" aria-hidden>✏️</span>
-                      <span className="home-card-title">Create new schedule</span>
-                      <span className="home-card-sub">
-                        {setupReady
-                          ? 'Pick a week, set leave & locks, review, save'
-                          : 'Set up stores & workers first — we’ll take you there'}
-                      </span>
-                    </button>
-                  </div>
+              {route === 'history' && (
+                <div className="settings-page">
+                  <h1 className="page-title">History</h1>
+                  <p className="hint">
+                    The two weeks before the current schedule. Saving a new week drops the oldest.
+                  </p>
+                  {olderWeeks.length === 0 ? (
+                    <div className="panel">
+                      <p className="hint">No older weeks yet — history fills in as you save more schedules.</p>
+                    </div>
+                  ) : (
+                    <ul className="picker">
+                      {olderWeeks.map((w) => (
+                        <li key={w.week_start}>
+                          <button type="button" className="pick pick-row" onClick={() => openWeek(w.week_start)}>
+                            <span className="pick-name">Week of {formatWeek(w.week_start)}</span>
+                            <span className="pick-status">view</span>
+                          </button>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
                 </div>
               )}
 
@@ -591,43 +652,30 @@ export default function App() {
                   stores={stores}
                   workers={workers}
                   prompt={settingsPrompt}
-                  weeksList={weeksList}
-                  onOpenWeek={openWeek}
                   onSave={handleSaveSettings}
                   onToast={showToast}
                 />
               )}
 
-              {route === 'viewer' && viewing && (
+              {route === 'viewer' && viewing && printMode && (
+                <PrintOverlay
+                  mode={printMode}
+                  weekStart={viewing.weekStart}
+                  stores={stores}
+                  workers={workers}
+                  schedule={viewing.schedule || {}}
+                  leaves={viewing.leaves || {}}
+                  labels={dayLabels(viewing.weekStart)}
+                  splitTimes={viewing.splitTimes || {}}
+                  onClose={() => setPrintMode(null)}
+                />
+              )}
+
+              {route === 'viewer' && viewing && !printMode && (
                 <>
-                  <div className="week-stamp-bar viewer-stamp">
-                    <span>
-                      Week of {formatWeek(viewing.weekStart)} —{' '}
-                      {viewing.dirty ? 'edited (unsaved)' : previewingOld ? 'previewing' : 'saved'}
-                    </span>
-                    <span className="version-nav">
-                      {viewing.idx > 0 && (
-                        <button
-                          type="button"
-                          className="version-arrow"
-                          aria-label="Earlier version"
-                          onClick={() => gotoVersion(viewing.idx - 1)}
-                        >
-                          ◄
-                        </button>
-                      )}
-                      <span className="version-label">v{viewing.idx}</span>
-                      {viewing.idx < viewing.versions.length - 1 && (
-                        <button
-                          type="button"
-                          className="version-arrow"
-                          aria-label="Later version"
-                          onClick={() => gotoVersion(viewing.idx + 1)}
-                        >
-                          ►
-                        </button>
-                      )}
-                    </span>
+                  <div className="week-stamp-bar">
+                    Week of {formatWeek(viewing.weekStart)} —{' '}
+                    {viewing.dirty ? 'edited (unsaved)' : previewingOld ? 'previewing' : 'saved'}
                   </div>
 
                   {previewingOld && !viewing.dirty && (
@@ -645,12 +693,8 @@ export default function App() {
                       workers={workers}
                       actions={[
                         {
-                          label: viewConflict.thenSave ? 'Apply anyway & save' : 'Keep my change',
-                          onClick: () => {
-                            const willSave = viewConflict.thenSave;
-                            setViewConflict(null);
-                            if (willSave) saveViewer();
-                          },
+                          label: 'Keep my change',
+                          onClick: () => setViewConflict(null),
                         },
                         {
                           label: 'Undo the change',
@@ -683,10 +727,32 @@ export default function App() {
                     onCoverApply={applyCover}
                     onToast={showToast}
                   />
-                  <div className="actions">
-                    <button type="button" className="btn btn-ghost" onClick={() => go('home')}>
-                      Back to home
-                    </button>
+                  <div className="actions viewer-actions">
+                    {viewing.versions.length > 1 && (
+                      <span className="version-nav" aria-label="Schedule versions">
+                        <button
+                          type="button"
+                          className="version-arrow"
+                          aria-label="Earlier version"
+                          disabled={viewing.idx === 0}
+                          onClick={() => gotoVersion(viewing.idx - 1)}
+                        >
+                          ◄
+                        </button>
+                        <span className="version-label">
+                          v{viewing.idx} of v{viewing.versions.length - 1}
+                        </span>
+                        <button
+                          type="button"
+                          className="version-arrow"
+                          aria-label="Later version"
+                          disabled={viewing.idx >= viewing.versions.length - 1}
+                          onClick={() => gotoVersion(viewing.idx + 1)}
+                        >
+                          ►
+                        </button>
+                      </span>
+                    )}
                     <button type="button" className="btn" onClick={() => setPrintMode('worker')}>
                       Print by worker
                     </button>
@@ -743,9 +809,11 @@ export default function App() {
                         </label>
                       </div>
                       <div className="actions">
-                        <button type="button" className="btn btn-ghost" onClick={() => go('home')}>
-                          Cancel
-                        </button>
+                        {(weeksList.length > 0 || viewing) && (
+                          <button type="button" className="btn btn-ghost" onClick={viewCurrent}>
+                            Cancel
+                          </button>
+                        )}
                         <button type="button" className="btn btn-primary" onClick={nextFromDate}>
                           Next
                         </button>
@@ -900,6 +968,20 @@ export default function App() {
           />
         )}
 
+        {pendingNav && (
+          <ConfirmModal
+            title="Discard this schedule draft?"
+            body={`Your unsaved progress on the week of ${formatWeek(wiz.weekStart)} will be lost.`}
+            confirmLabel="Discard draft"
+            onCancel={() => setPendingNav(null)}
+            onConfirm={() => {
+              const action = pendingNav;
+              setPendingNav(null);
+              action();
+            }}
+          />
+        )}
+
         {collisionAsk && (
           <ConfirmModal
             title="A schedule already exists for this week"
@@ -932,20 +1014,6 @@ export default function App() {
           onExpire={() => setToast(null)}
         />
       </div>
-
-      {printMode && viewing && (
-        <PrintOverlay
-          mode={printMode}
-          weekStart={viewing.weekStart}
-          stores={stores}
-          workers={workers}
-          schedule={viewing.schedule || {}}
-          leaves={viewing.leaves || {}}
-          labels={dayLabels(viewing.weekStart)}
-          splitTimes={viewing.splitTimes || {}}
-          onClose={() => setPrintMode(null)}
-        />
-      )}
     </>
   );
 }

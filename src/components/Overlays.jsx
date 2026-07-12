@@ -55,8 +55,8 @@ export function SaveSheet({ weekStart, openSlots, saving, onSave, onCancel }) {
         <div className="sheet-grab" />
         <h3>Save this schedule?</h3>
         <p className="hint">
-          Saving commits the week of {formatWeek(weekStart)}, enables printing, and archives it. Only the two most
-          recent weeks are kept — saving replaces the oldest.
+          Saving commits the week of {formatWeek(weekStart)}, enables printing, and archives it. Only the three most
+          recent weeks are kept — saving a fourth drops the oldest.
         </p>
         {openSlots > 0 && (
           <p className="hint" style={{ color: 'var(--gap)', fontWeight: 600 }}>
@@ -179,8 +179,10 @@ export function PrintOverlay({ mode, weekStart, stores, workers, schedule, leave
   const shownWorkers = only === 'all' ? workers : workers.filter((w) => String(w.id) === only);
   const shownStores = only === 'all' ? stores : stores.filter((s) => String(s.id) === only);
 
+  // Rendered inside the app shell (not a fixed overlay) so the sidebar stays
+  // reachable while previewing; @media print hides all chrome around .print-sheet.
   return (
-    <div className="print-overlay">
+    <div className="print-view">
       <div className="print-toolbar">
         <span>{mode === 'worker' ? 'Print by worker' : 'Print by store'} — {title}</span>
         <div className="print-toolbar-btns">

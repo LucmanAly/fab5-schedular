@@ -1,6 +1,9 @@
 -- ============================================================================
 -- ShiftBoard — Supabase setup (v4: shift modes, store hours, day allowance,
--- version stack, seed data)
+-- version stack, seed data; v4.2/v4.3: three-week retention + save-batched
+-- versions — comment-only changes, the schema is identical to v4/v4.1 and
+-- re-running is NOT required if those tables already exist. Retention count
+-- lives in the app: WEEKS_KEPT in src/lib/supabase.js.)
 -- FULL REPLACEMENT: drops and recreates every ShiftBoard table.
 -- Existing schedule data will be lost — this version changes the data model.
 -- Run in the Supabase SQL Editor: New query -> paste -> Run.
@@ -56,14 +59,18 @@ create unique index workers_one_main_per_store on workers (main_store_id)
 
 -- ---------------------------------------------------------------------------
 -- Weeks archive. Identity = calendar week (week_start date is the key). The
--- app keeps only the two most recent distinct weeks: saving a new week
--- automatically deletes the oldest (see pruneWeeks in the app).
+-- app keeps only the three most recent distinct weeks (the current schedule
+-- plus two weeks of history): saving a new week automatically deletes the
+-- oldest (see pruneWeeks / WEEKS_KEPT in the app — not enforced in SQL).
 -- split_times: { "storeId-dayIndex": "HH:MM" } per-instance changeover
 --   overrides; anything absent uses the derived default (window midpoint).
 -- versions: the intra-week version stack (v0..v4, max 5 entries) — an array
---   of { schedule, splitTimes, leaves, savedAt }. Only the current week keeps
---   a stack; the app clears it on every other week when saving, so a week
---   rolling into history carries only its final saved version.
+--   of { schedule, splitTimes, leaves, savedAt }. ONE ENTRY PER EXPLICIT SAVE:
+--   edits (manual reassignments, split changes, Find Cover applies) accumulate
+--   as unsaved changes in the app and batch into a single new version when the
+--   admin saves; v0 is the freshly generated schedule. Only the current week
+--   keeps a stack; the app clears it on every other week when saving, so a
+--   week rolling into history carries only its final saved version.
 -- ---------------------------------------------------------------------------
 create table weeks (
   week_start  date primary key,

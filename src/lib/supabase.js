@@ -6,9 +6,9 @@ const KEY = import.meta.env.VITE_SUPABASE_ANON_KEY;
 
 export const enabled = Boolean(URL && KEY);
 
-// Only the two most recent saved weeks are kept; saving a new week
-// automatically evicts the oldest.
-export const WEEKS_KEPT = 2;
+// Only the three most recent saved weeks are kept (current + two weeks of
+// history); saving a new week automatically evicts the oldest.
+export const WEEKS_KEPT = 3;
 
 // Legacy anon keys are JWTs (start with "eyJ") and go in the Authorization header.
 // New publishable keys (sb_publishable_...) authenticate via the apikey header only.
@@ -117,15 +117,17 @@ export async function saveSetup(stores, workers) {
   }
 }
 
-// ---------- Weeks (the two-week archive) ----------
+// ---------- Weeks (the three-week archive) ----------
 
 export async function listWeeks() {
   return (await sb('weeks?select=week_start,status,saved_at&order=week_start.desc')) || [];
 }
 
-// Intra-week version stack (v0..v4): stored as jsonb on the week row. Only
-// the current week keeps a stack — saving clears every other week's stack, so
-// a week rolling into history carries only its final saved version.
+// Intra-week version stack (v0..v4): stored as jsonb on the week row. One
+// entry per explicit Save — edits (manual, split, Find Cover) accumulate as
+// unsaved changes and batch into a single new version when saved. Only the
+// current week keeps a stack — saving clears every other week's stack, so a
+// week rolling into history carries only its final saved version.
 export const MAX_VERSIONS = 5;
 
 export async function saveWeek(weekStart, { leaves = {}, locks = {}, schedule = {}, splitTimes = {}, versions = [] }) {

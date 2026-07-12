@@ -1,10 +1,13 @@
-import { useMemo, useRef, useState } from 'react';
-import { formatWeek } from '../lib/scheduler';
+import { useEffect, useRef, useState } from 'react';
 import { ConfirmModal } from './Overlays';
 
 // Settings is a full page reached from the sidebar.
 // Setup order: 1) add stores, 2) add workers and link them to stores.
 // Names are case-insensitive: uniqueness checks and store matching ignore case.
+//
+// Every edit persists immediately: text/number/time fields commit on blur
+// (invalid values snap back), buttons/links/toggles commit on click. There is
+// no staged draft and no Save button — App serializes the resulting saves.
 
 const norm = (s) => (s || '').trim().toLowerCase();
 
@@ -16,80 +19,101 @@ const STORE_DEFAULTS = {
   weekend_close: '22:00',
 };
 
-export default function SettingsPage({ stores, workers, prompt, weeksList, onOpenWeek, onSave, onToast }) {
-  const [tempStores, setTempStores] = useState(stores);
-  const [tempWorkers, setTempWorkers] = useState(workers);
-  const [tab, setTab] = useState('stores'); // stores | workers | history
+/**
+ * Input that buffers keystrokes locally and commits on blur (Enter blurs).
+ * If `validate` rejects the trimmed value, the field reverts to the last
+ * committed value instead of saving.
+ */
+function BlurField({ value, onCommit, validate, ...rest }) {
+  const [v, setV] = useState(value);
+  useEffect(() => setV(value), [value]);
+  return (
+    <input
+      {...rest}
+      value={v}
+      onChange={(e) => setV(e.target.value)}
+      onKeyDown={(e) => e.key === 'Enter' && e.currentTarget.blur()}
+      onBlur={() => {
+        const next = typeof v === 'string' ? v.trim() : v;
+        if (validate && !validate(next)) {
+          setV(value);
+          return;
+        }
+        if (next !== value) onCommit(next);
+        else setV(value);
+      }}
+    />
+  );
+}
+
+export default function SettingsPage({ stores, workers, prompt, onSave, onToast }) {
+  const [tab, setTab] = useState('stores'); // stores | workers
   const [newStoreName, setNewStoreName] = useState('');
   const [storeError, setStoreError] = useState(null);
   const [addingWorker, setAddingWorker] = useState(false);
-  const [dirty, setDirty] = useState(false);
-  const [savedFlash, setSavedFlash] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(null); // { kind: 'store'|'worker', id, name }
 
-  const storeName = (id) => (tempStores.find((s) => s.id === id) || {}).name || `Store ${id}`;
-  const mainOf = (storeId) => tempWorkers.find((w) => w.main_store_id === storeId) || null;
+  const storeName = (id) => (stores.find((s) => s.id === id) || {}).name || `Store ${id}`;
+  const mainOf = (storeId) => workers.find((w) => w.main_store_id === storeId) || null;
 
-  const problems = useMemo(() => {
+  const problems = (() => {
     const list = [];
-    const storeNames = tempStores.map((s) => norm(s.name));
-    if (storeNames.some((n) => !n)) list.push('Every store needs a name.');
-    if (new Set(storeNames).size !== storeNames.length) list.push('Store names must be unique (case doesn’t matter).');
-    const workerNames = tempWorkers.map((w) => norm(w.name));
-    if (workerNames.some((n) => !n)) list.push('Every worker needs a name.');
-    if (new Set(workerNames).size !== workerNames.length) list.push('Worker names must be unique (case doesn’t matter).');
-    for (const w of tempWorkers) {
+    for (const w of workers) {
       if (!w.store_ids || w.store_ids.length === 0) list.push(`${w.name || 'A worker'} isn’t linked to any store.`);
     }
     return list;
-  }, [tempStores, tempWorkers]);
+  })();
 
-  const staffingShort = tempStores.length > 0 && tempWorkers.length < tempStores.length;
+  const staffingShort = stores.length > 0 && workers.length < stores.length;
 
   // ---------- stores ----------
 
   function addStore() {
     const name = newStoreName.trim();
     if (!name) return;
-    if (tempStores.some((s) => norm(s.name) === norm(name))) {
+    if (stores.some((s) => norm(s.name) === norm(name))) {
       setStoreError(`“${name}” already exists — store names must be unique.`);
       return;
     }
-    const id = Math.max(0, ...tempStores.map((s) => s.id)) + 1;
-    setTempStores([...tempStores, { id, name, ...STORE_DEFAULTS }]);
+    const id = Math.max(0, ...stores.map((s) => s.id)) + 1;
+    onSave([...stores, { id, name, ...STORE_DEFAULTS }], workers);
     setNewStoreName('');
     setStoreError(null);
-    setDirty(true);
   }
 
   function patchStore(id, patch) {
-    setTempStores(tempStores.map((s) => (s.id === id ? { ...s, ...patch } : s)));
-    setDirty(true);
+    onSave(
+      stores.map((s) => (s.id === id ? { ...s, ...patch } : s)),
+      workers
+    );
   }
 
   // Tier 1 (§8): deleting a store cascades into links — confirm modal first.
   function deleteStore(id) {
-    setTempStores(tempStores.filter((s) => s.id !== id));
-    setTempWorkers(
-      tempWorkers.map((w) => ({
+    onSave(
+      stores.filter((s) => s.id !== id),
+      workers.map((w) => ({
         ...w,
         store_ids: (w.store_ids || []).filter((sid) => sid !== id),
         main_store_id: w.main_store_id === id ? null : w.main_store_id,
       }))
     );
-    setDirty(true);
   }
 
   // ---------- workers ----------
 
   function patchWorker(id, patch) {
-    setTempWorkers(tempWorkers.map((w) => (w.id === id ? { ...w, ...patch } : w)));
-    setDirty(true);
+    onSave(
+      stores,
+      workers.map((w) => (w.id === id ? { ...w, ...patch } : w))
+    );
   }
 
   function deleteWorker(id) {
-    setTempWorkers(tempWorkers.filter((w) => w.id !== id));
-    setDirty(true);
+    onSave(
+      stores,
+      workers.filter((w) => w.id !== id)
+    );
   }
 
   function linkStore(worker, storeId) {
@@ -99,7 +123,7 @@ export default function SettingsPage({ stores, workers, prompt, weeksList, onOpe
 
   // Tier 2 (§8): clearing a link applies immediately with a 5s undo toast.
   function unlinkStore(worker, storeId) {
-    const before = tempWorkers;
+    const before = workers;
     const ids = (worker.store_ids || []).filter((s) => s !== storeId);
     patchWorker(worker.id, {
       store_ids: ids,
@@ -107,10 +131,7 @@ export default function SettingsPage({ stores, workers, prompt, weeksList, onOpe
       main_store_id: worker.main_store_id === storeId ? null : worker.main_store_id,
     });
     if (onToast) {
-      onToast(`Removed ${worker.name}'s link to ${storeName(storeId)}`, () => {
-        setTempWorkers(before);
-        setDirty(true);
-      });
+      onToast(`Removed ${worker.name}'s link to ${storeName(storeId)}`, () => onSave(stores, before));
     }
   }
 
@@ -138,43 +159,35 @@ export default function SettingsPage({ stores, workers, prompt, weeksList, onOpe
   }
 
   function createWorker({ name, storeIds, role }) {
-    if (tempWorkers.some((w) => norm(w.name) === norm(name))) return false;
-    const id = Math.max(0, ...tempWorkers.map((w) => w.id)) + 1;
-    setTempWorkers([
-      ...tempWorkers,
+    if (workers.some((w) => norm(w.name) === norm(name))) return false;
+    const id = Math.max(0, ...workers.map((w) => w.id)) + 1;
+    onSave(stores, [
+      ...workers,
       { id, name: name.trim(), store_ids: storeIds, main_store_id: role === 'main' ? storeIds[0] : null, max_workdays: 5 },
     ]);
-    setDirty(true);
     return true;
-  }
-
-  function handleSave() {
-    onSave(tempStores, tempWorkers);
-    setDirty(false);
-    setSavedFlash(true);
-    setTimeout(() => setSavedFlash(false), 2000);
   }
 
   return (
     <div className="settings-page">
       <h1 className="page-title">Settings</h1>
+      <p className="hint">Changes save automatically.</p>
 
       {prompt && <div className="banner banner-bad">{prompt}</div>}
 
       {staffingShort && (
         <div className="banner banner-bad">
-          Not enough workers: {tempWorkers.length} worker{tempWorkers.length === 1 ? '' : 's'} for {tempStores.length}{' '}
+          Not enough workers: {workers.length} worker{workers.length === 1 ? '' : 's'} for {stores.length}{' '}
           stores. You need at least one worker per store (more is better).
         </div>
       )}
 
       <div className="settings-tabs">
         {[
-          ['stores', `Stores (${tempStores.length})`],
-          ['workers', `Workers (${tempWorkers.length})`],
-          ['history', 'History'],
+          ['stores', `Stores (${stores.length})`],
+          ['workers', `Workers (${workers.length})`],
         ].map(([id, label]) => (
-          <button key={id} className={`settings-tab ${tab === id ? 'active' : ''}`} onClick={() => setTab(id)}>
+          <button key={id} type="button" className={`settings-tab ${tab === id ? 'active' : ''}`} onClick={() => setTab(id)}>
             {label}
           </button>
         ))}
@@ -190,6 +203,7 @@ export default function SettingsPage({ stores, workers, prompt, weeksList, onOpe
               type="text"
               value={newStoreName}
               placeholder="New store name"
+              aria-label="New store name"
               onChange={(e) => {
                 setNewStoreName(e.target.value);
                 setStoreError(null);
@@ -203,84 +217,18 @@ export default function SettingsPage({ stores, workers, prompt, weeksList, onOpe
           {storeError && <p className="field-error">{storeError}</p>}
 
           <div className="settings-list">
-            {tempStores.map((s) => {
-              const main = mainOf(s.id);
-              return (
-                <div key={s.id} className="settings-worker-card store-card-settings">
-                  <div className="worker-header">
-                    <input
-                      type="text"
-                      className="worker-name"
-                      value={s.name}
-                      onChange={(e) => patchStore(s.id, { name: e.target.value })}
-                    />
-                    <span className="store-row-main">{main ? `Main: ${main.name}` : 'No main worker yet'}</span>
-                    <button
-                      type="button"
-                      className="worker-delete"
-                      title="Delete store"
-                      onClick={() => setConfirmDelete({ kind: 'store', id: s.id, name: s.name })}
-                    >
-                      ✕
-                    </button>
-                  </div>
-
-                  <div className="store-settings-row">
-                    <span className="store-settings-label">Shift mode</span>
-                    <div className="settings-seg shift-mode-seg">
-                      <button
-                        type="button"
-                        className={(s.shift_mode || 'default') === 'default' ? 'active' : ''}
-                        onClick={() => patchStore(s.id, { shift_mode: 'default' })}
-                      >
-                        Default
-                      </button>
-                      <button
-                        type="button"
-                        className={s.shift_mode === 'split_only' ? 'active' : ''}
-                        onClick={() => patchStore(s.id, { shift_mode: 'split_only' })}
-                      >
-                        Split Shift Only
-                      </button>
-                    </div>
-                  </div>
-
-                  <div className="store-settings-row">
-                    <span className="store-settings-label">Weekday hours</span>
-                    <span className="store-hours-pair">
-                      <input
-                        type="time"
-                        value={s.weekday_open || '08:00'}
-                        onChange={(e) => e.target.value && patchStore(s.id, { weekday_open: e.target.value })}
-                      />
-                      –
-                      <input
-                        type="time"
-                        value={s.weekday_close || '22:00'}
-                        onChange={(e) => e.target.value && patchStore(s.id, { weekday_close: e.target.value })}
-                      />
-                    </span>
-                  </div>
-                  <div className="store-settings-row">
-                    <span className="store-settings-label">Weekend hours</span>
-                    <span className="store-hours-pair">
-                      <input
-                        type="time"
-                        value={s.weekend_open || '09:00'}
-                        onChange={(e) => e.target.value && patchStore(s.id, { weekend_open: e.target.value })}
-                      />
-                      –
-                      <input
-                        type="time"
-                        value={s.weekend_close || '22:00'}
-                        onChange={(e) => e.target.value && patchStore(s.id, { weekend_close: e.target.value })}
-                      />
-                    </span>
-                  </div>
-                </div>
-              );
-            })}
-            {tempStores.length === 0 && <p className="settings-hint">No stores yet — add your first one above.</p>}
+            {stores.map((s) => (
+              <StoreCard
+                key={s.id}
+                store={s}
+                stores={stores}
+                workers={workers}
+                mainOf={mainOf}
+                onPatch={(patch) => patchStore(s.id, patch)}
+                onDelete={() => setConfirmDelete({ kind: 'store', id: s.id, name: s.name })}
+              />
+            ))}
+            {stores.length === 0 && <p className="settings-hint">No stores yet — add your first one above.</p>}
           </div>
         </div>
       )}
@@ -293,7 +241,7 @@ export default function SettingsPage({ stores, workers, prompt, weeksList, onOpe
             drops with every store further down the list. Each store can have one Main worker.
           </p>
 
-          {tempStores.length === 0 ? (
+          {stores.length === 0 ? (
             <p className="settings-hint">Add stores first — workers link to stores.</p>
           ) : (
             <>
@@ -302,11 +250,11 @@ export default function SettingsPage({ stores, workers, prompt, weeksList, onOpe
               </button>
 
               <div className="settings-list" style={{ marginTop: 12 }}>
-                {tempWorkers.map((w) => (
+                {workers.map((w) => (
                   <WorkerCard
                     key={w.id}
                     worker={w}
-                    stores={tempStores}
+                    workers={workers}
                     storeName={storeName}
                     mainOf={mainOf}
                     onRename={(name) => patchWorker(w.id, { name })}
@@ -316,6 +264,7 @@ export default function SettingsPage({ stores, workers, prompt, weeksList, onOpe
                     onUnlink={(sid) => unlinkStore(w, sid)}
                     onMove={(sid, dir) => moveLink(w, sid, dir)}
                     onRole={(role) => setRole(w, role)}
+                    stores={stores}
                   />
                 ))}
               </div>
@@ -324,41 +273,14 @@ export default function SettingsPage({ stores, workers, prompt, weeksList, onOpe
         </div>
       )}
 
-      {tab === 'history' && (
-        <div className="panel settings-section">
-          <h3 className="settings-section-title">Schedule history</h3>
-          <p className="settings-hint">The two most recent saved weeks are kept. Saving a new week replaces the oldest.</p>
-          {weeksList.length === 0 && <p className="settings-hint">Nothing saved yet.</p>}
-          <ul className="picker">
-            {weeksList.map((w) => (
-              <li key={w.week_start}>
-                <button type="button" className="pick pick-row" onClick={() => onOpenWeek(w.week_start)}>
-                  <span className="pick-name">Week of {formatWeek(w.week_start)}</span>
-                  <span className="pick-status">view</span>
-                </button>
-              </li>
+      {problems.length > 0 && (
+        <div className="banner banner-bad">
+          <ul className="violation-list">
+            {problems.map((p) => (
+              <li key={p}>{p}</li>
             ))}
           </ul>
         </div>
-      )}
-
-      {tab !== 'history' && (
-        <>
-          {problems.length > 0 && (
-            <div className="banner banner-bad">
-              <ul className="violation-list">
-                {problems.map((p) => (
-                  <li key={p}>{p}</li>
-                ))}
-              </ul>
-            </div>
-          )}
-          <div className="actions">
-            <button type="button" className="btn btn-primary" onClick={handleSave} disabled={problems.length > 0 || !dirty}>
-              {savedFlash ? '✓ Saved' : 'Save setup'}
-            </button>
-          </div>
-        </>
       )}
 
       {confirmDelete && (
@@ -381,8 +303,8 @@ export default function SettingsPage({ stores, workers, prompt, weeksList, onOpe
 
       {addingWorker && (
         <AddWorkerSheet
-          stores={tempStores}
-          workers={tempWorkers}
+          stores={stores}
+          workers={workers}
           mainOf={mainOf}
           onCreate={(payload) => {
             if (createWorker(payload)) setAddingWorker(false);
@@ -394,7 +316,97 @@ export default function SettingsPage({ stores, workers, prompt, weeksList, onOpe
   );
 }
 
-function WorkerCard({ worker, stores, storeName, mainOf, onRename, onAllowance, onDelete, onLink, onUnlink, onMove, onRole }) {
+function StoreCard({ store: s, stores, workers, mainOf, onPatch, onDelete }) {
+  const main = mainOf(s.id);
+  // Read-only roster: Main first, then everyone linked to this store ordered
+  // by how high this store sits in their own preference list.
+  const linked = workers
+    .filter((w) => (w.store_ids || []).includes(s.id) && (!main || w.id !== main.id))
+    .sort((a, b) => (a.store_ids || []).indexOf(s.id) - (b.store_ids || []).indexOf(s.id));
+
+  const hoursField = (key, fallback) => (
+    <BlurField
+      type="time"
+      value={s[key] || fallback}
+      validate={(v) => !!v}
+      onCommit={(v) => onPatch({ [key]: v })}
+    />
+  );
+
+  return (
+    <div className="settings-worker-card store-card-settings">
+      <div className="worker-header">
+        <BlurField
+          type="text"
+          className="worker-name"
+          aria-label="Store name"
+          value={s.name}
+          validate={(v) => !!v && !stores.some((o) => o.id !== s.id && norm(o.name) === norm(v))}
+          onCommit={(v) => onPatch({ name: v })}
+        />
+        <span className="store-row-main">{main ? `Main: ${main.name}` : 'No main worker yet'}</span>
+        <button type="button" className="worker-delete" title="Delete store" aria-label={`Delete ${s.name}`} onClick={onDelete}>
+          ✕
+        </button>
+      </div>
+
+      <div className="store-settings-row">
+        <span className="store-settings-label">Shift mode</span>
+        <div className="settings-seg shift-mode-seg">
+          <button
+            type="button"
+            className={(s.shift_mode || 'default') === 'default' ? 'active' : ''}
+            onClick={() => onPatch({ shift_mode: 'default' })}
+          >
+            Default
+          </button>
+          <button
+            type="button"
+            className={s.shift_mode === 'split_only' ? 'active' : ''}
+            onClick={() => onPatch({ shift_mode: 'split_only' })}
+          >
+            Split Shift Only
+          </button>
+        </div>
+      </div>
+
+      <div className="store-settings-row">
+        <span className="store-settings-label">Weekday hours</span>
+        <span className="store-hours-pair">
+          {hoursField('weekday_open', '08:00')}
+          –
+          {hoursField('weekday_close', '22:00')}
+        </span>
+      </div>
+      <div className="store-settings-row">
+        <span className="store-settings-label">Weekend hours</span>
+        <span className="store-hours-pair">
+          {hoursField('weekend_open', '09:00')}
+          –
+          {hoursField('weekend_close', '22:00')}
+        </span>
+      </div>
+
+      <div className="store-settings-row store-linked-workers">
+        <span className="store-settings-label">Linked workers</span>
+        {main == null && linked.length === 0 ? (
+          <span className="settings-hint-inline">No workers linked yet</span>
+        ) : (
+          <span className="linked-worker-list">
+            {main && <span className="linked-worker linked-worker-main">{main.name} · main</span>}
+            {linked.map((w) => (
+              <span key={w.id} className="linked-worker">
+                {w.name}
+              </span>
+            ))}
+          </span>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function WorkerCard({ worker, workers, stores, storeName, mainOf, onRename, onAllowance, onDelete, onLink, onUnlink, onMove, onRole }) {
   const ids = worker.store_ids || [];
   const home = ids[0];
   const homeMain = home != null ? mainOf(home) : null;
@@ -403,36 +415,35 @@ function WorkerCard({ worker, stores, storeName, mainOf, onRename, onAllowance, 
   return (
     <div className="settings-worker-card">
       <div className="worker-header">
-        <input
+        <BlurField
           type="text"
           className="worker-name"
-          value={worker.name}
+          aria-label="Worker name"
           placeholder="Worker name"
-          onChange={(e) => onRename(e.target.value)}
+          value={worker.name}
+          validate={(v) => !!v && !workers.some((o) => o.id !== worker.id && norm(o.name) === norm(v))}
+          onCommit={onRename}
         />
         <span className={`chip chip-${worker.main_store_id != null ? 'main' : 'float'}`}>
           {worker.main_store_id != null ? `Main · ${storeName(worker.main_store_id)}` : 'Float'}
         </span>
-        <button type="button" className="worker-delete" title="Delete worker" onClick={onDelete}>
+        <button type="button" className="worker-delete" title="Delete worker" aria-label={`Delete ${worker.name}`} onClick={onDelete}>
           ✕
         </button>
       </div>
 
       <div className="store-settings-row">
         <span className="store-settings-label">Max workdays/week</span>
-        <input
+        <BlurField
           type="number"
           className="allowance-input"
           min="0.5"
           max="7"
           step="0.5"
-          value={worker.max_workdays != null ? worker.max_workdays : 5}
-          onChange={(e) => {
-            const v = Number(e.target.value);
-            if (Number.isFinite(v)) onAllowance(Math.max(0.5, Math.min(7, Math.round(v * 2) / 2)));
-          }}
+          value={String(worker.max_workdays != null ? worker.max_workdays : 5)}
+          validate={(v) => v !== '' && Number.isFinite(Number(v))}
+          onCommit={(v) => onAllowance(Math.max(0.5, Math.min(7, Math.round(Number(v) * 2) / 2)))}
         />
-        <small className="settings-hint-inline">Full day = 1 · split day = 0.5</small>
       </div>
 
       {ids.length > 0 && (
@@ -497,10 +508,7 @@ function AddWorkerSheet({ stores, workers, mainOf, onCreate, onClose }) {
   const canCreate = name.trim() && !nameTaken && storeIds.length > 0 && role != null;
 
   function pickStore(sid) {
-    setStoreIds((ids) => {
-      const next = [...ids, sid];
-      return next;
-    });
+    setStoreIds((ids) => [...ids, sid]);
   }
 
   function removeStore(sid) {
@@ -618,6 +626,7 @@ function StoreTypeahead({ stores, excludeIds, onPick, placeholder }) {
         type="text"
         value={q}
         placeholder={placeholder}
+        aria-label={placeholder}
         onChange={(e) => {
           setQ(e.target.value);
           setOpen(true);
