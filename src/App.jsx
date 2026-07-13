@@ -664,7 +664,6 @@ export default function App() {
                   stores={stores}
                   workers={workers}
                   schedule={viewing.schedule || {}}
-                  leaves={viewing.leaves || {}}
                   labels={dayLabels(viewing.weekStart)}
                   splitTimes={viewing.splitTimes || {}}
                   onClose={() => setPrintMode(null)}

@@ -757,16 +757,28 @@ button.pick:not(:disabled):hover { background: var(--paper); border-color: #cbd5
 }
 .print-block th { background: #eee; text-align: center; font-family: var(--display); font-weight: 600; letter-spacing: 0.4px; }
 
-/* Off/leave days read as a plain centered tag, not a stray dash. */
-.cell-off { text-align: center; vertical-align: middle; }
-.off-tag { font-size: 11px; font-weight: 700; letter-spacing: 1px; color: #888; }
+/* Off days (leave included — the printed sheet doesn't need to distinguish
+   why someone isn't working) read as a plain centered badge, not a stray dash.
+   Prefixed print- to avoid colliding with the unrelated .cell-off/.cell-split
+   classes used by the on-screen schedule grid elsewhere in this file. */
+.print-off-cell { text-align: center; vertical-align: middle; background: #f2f2f3; }
+.print-off-tag {
+  display: inline-block;
+  padding: 3px 10px;
+  border-radius: 3px;
+  background: #dcdde0;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 1.5px;
+  color: var(--ink);
+}
 
 /* Name on its own line, time below — keeps every cell the same shape whether
    it's a single half-day shift or a full-day one (no more elongated rows). */
 .shift-entry { display: flex; flex-direction: column; gap: 1px; }
 .shift-entry + .shift-entry { margin-top: 7px; padding-top: 7px; border-top: 1px dashed #bbb; }
-.shift-half { font-size: 9px; font-weight: 700; letter-spacing: 1px; color: #999; }
-.shift-store { font-weight: 600; }
+.shift-half { font-size: 9px; font-weight: 700; letter-spacing: 1px; color: #666; }
+.shift-store { font-weight: 600; color: #000; }
 .shift-time { font-size: 11.5px; color: #444; }
 
 .print-footer { margin-top: 30px; padding-top: 10px; border-top: 1px solid #ccc; font-size: 11px; color: #888; text-align: center; }

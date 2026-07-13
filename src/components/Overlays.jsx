@@ -150,13 +150,12 @@ export function DiagnosticsPanel({ status, diag, lastError, onTest, onClose }) {
 
 // Structured (not string) so the printed cell can lay out name/time on their own
 // lines instead of one elongated line, and so a lone half-day shift renders plainly
-// instead of as a fake "— / Shop 3pm–10pm" split.
-function workerDayCell(schedule, stores, storeName, wId, d, leaves, splitTimes) {
+// instead of as a fake "— / Shop 3pm–10pm" split. Leave and a plain day off print
+// identically ("OFF") — the distinction isn't useful to whoever reads the sheet.
+function workerDayCell(schedule, stores, storeName, wId, d, splitTimes) {
   const s = (schedule[wId] && schedule[wId][d]) || { am: null, pm: null };
   const byId = (id) => stores.find((st) => st.id === id);
-  if (s.am == null && s.pm == null) {
-    return { kind: leaves[wId] && leaves[wId][d] ? 'leave' : 'off' };
-  }
+  if (s.am == null && s.pm == null) return { kind: 'off' };
   if (s.am != null && s.am === s.pm) {
     return { kind: 'full', shifts: [{ name: storeName(s.am), time: shiftTimeCompact(byId(s.am), d, 'full', splitTimes) }] };
   }
@@ -167,15 +166,15 @@ function workerDayCell(schedule, stores, storeName, wId, d, leaves, splitTimes) 
 }
 
 function WorkerCell({ cell }) {
-  if (cell.kind === 'off' || cell.kind === 'leave') {
+  if (cell.kind === 'off') {
     return (
-      <td className="cell-off">
-        <span className="off-tag">{cell.kind === 'leave' ? 'LEAVE' : 'OFF'}</span>
+      <td className="print-off-cell">
+        <span className="print-off-tag">OFF</span>
       </td>
     );
   }
   return (
-    <td className={cell.kind === 'split' ? 'cell-split' : undefined}>
+    <td className={cell.kind === 'split' ? 'print-split-cell' : undefined}>
       {cell.shifts.map((sh, i) => (
         <div className="shift-entry" key={sh.half || i}>
           {cell.kind === 'split' && <span className="shift-half">{sh.half}</span>}
@@ -197,7 +196,7 @@ function daySummaryByStore(schedule, workers, store, d, splitTimes) {
   return `${a} / ${p}`;
 }
 
-export function PrintOverlay({ mode, weekStart, stores, workers, schedule, leaves, labels, splitTimes = {}, onClose }) {
+export function PrintOverlay({ mode, weekStart, stores, workers, schedule, labels, splitTimes = {}, onClose }) {
   const storeName = (id) => (stores.find((s) => s.id === id) || {}).name || `Store ${id}`;
   const title = `Week of ${formatWeek(weekStart)}`;
   const weekRange = formatWeekRange(weekStart);
@@ -267,7 +266,7 @@ export function PrintOverlay({ mode, weekStart, stores, workers, schedule, leave
                   <tbody>
                     <tr>
                       {DAY_NAMES.map((_, d) => (
-                        <WorkerCell key={d} cell={workerDayCell(schedule, stores, storeName, w.id, d, leaves, splitTimes)} />
+                        <WorkerCell key={d} cell={workerDayCell(schedule, stores, storeName, w.id, d, splitTimes)} />
                       ))}
                     </tr>
                   </tbody>

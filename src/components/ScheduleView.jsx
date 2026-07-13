@@ -47,9 +47,9 @@ export default function ScheduleView({
   onCoverApply,
   onToast,
 }) {
-  const [mode, setMode] = useState(() =>
-    typeof window !== 'undefined' && window.innerWidth < 768 ? 'day' : 'week'
-  );
+  // Week/by-store is the default landing view regardless of screen size — Day
+  // and By worker are still one tap away for whoever wants them.
+  const [mode, setMode] = useState('week');
   const [group, setGroup] = useState('store'); // store | worker
   const [activeDay, setActiveDay] = useState(0);
   const [target, setTarget] = useState(null); // { storeId, dayIdx } — manual editor
