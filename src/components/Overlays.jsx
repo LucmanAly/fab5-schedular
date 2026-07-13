@@ -152,7 +152,7 @@ export function DiagnosticsPanel({ status, diag, lastError, onTest, onClose }) {
 // lines instead of one elongated line, and so a lone half-day shift renders plainly
 // instead of as a fake "— / Shop 3pm–10pm" split. Leave and a plain day off print
 // identically ("OFF") — the distinction isn't useful to whoever reads the sheet.
-function workerDayCell(schedule, stores, storeName, wId, d, splitTimes) {
+export function workerDayCell(schedule, stores, storeName, wId, d, splitTimes) {
   const s = (schedule[wId] && schedule[wId][d]) || { am: null, pm: null };
   const byId = (id) => stores.find((st) => st.id === id);
   if (s.am == null && s.pm == null) return { kind: 'off' };
@@ -165,7 +165,7 @@ function workerDayCell(schedule, stores, storeName, wId, d, splitTimes) {
   return { kind: shifts.length > 1 ? 'split' : 'shift', shifts };
 }
 
-function WorkerCell({ cell }) {
+export function WorkerCell({ cell }) {
   if (cell.kind === 'off') {
     return (
       <td className="print-off-cell">

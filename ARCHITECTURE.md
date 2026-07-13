@@ -286,6 +286,12 @@ When Supabase is configured, the app now gates itself on a session before loadin
 
 Once signed in, `sb()` attaches the admin's access token (`Authorization: Bearer <token>`) to every non-GET request; reads still use the plain anon key. This matches the RLS split (§1, §2): `anon` is SELECT-only, `authenticated` has full CRUD. Local-only mode (no Supabase keys) is unaffected — the login gate only appears when the cloud is configured.
 
+### 8.9 Per-worker public schedule link (round 3)
+
+Each worker can have a permanent `public_token` (generated once, via "Copy link"/"Generate link" in their Settings card — §8.2). Visiting `/?view=TOKEN` never mounts the authenticated app at all: `src/main.jsx` checks the URL before rendering `<App/>` and swaps in `PublicScheduleView` instead, so a worker's link hits no login gate and no wizard-boot effects. The view does a minimal read (`loadSetup` + `listWeeks` + `loadWeek` on the newest week, all reused as-is from `src/lib/supabase.js`), finds the worker by token, and renders **only that worker's row** — reusing the same `workerDayCell`/`WorkerCell` cell rendering as the print sheet (§8.7) — never the full roster.
+
+Known limitation: RLS is table-level, not per-token, so the underlying fetch still pulls the full `stores`/`workers`/`schedule`/`weeks` tables (read-only, per §8.8's anon policy) and filters to one worker client-side. The UI never shows more than one worker's schedule, but a technically sophisticated visitor inspecting network traffic on their own link could see the full payload. True per-row isolation would need a Postgres function/view keyed on the token — out of scope given the "no backend of ours" constraint (§1).
+
 ---
 
 ## 9. History & retention

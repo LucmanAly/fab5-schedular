@@ -276,6 +276,8 @@ export default function SettingsPage({ stores, workers, prompt, onSave, onToast 
                     onRole={(role) => setRole(w, role)}
                     onRecurringLeave={(days) => patchWorker(w.id, { recurring_leaves: days })}
                     onRecurringLock={(days) => patchWorker(w.id, { recurring_locks: days })}
+                    onGenerateToken={() => patchWorker(w.id, { public_token: crypto.randomUUID() })}
+                    onToast={onToast}
                     stores={stores}
                   />
                 ))}
@@ -433,6 +435,8 @@ function WorkerCard({
   onRole,
   onRecurringLeave,
   onRecurringLock,
+  onGenerateToken,
+  onToast,
 }) {
   const ids = worker.store_ids || [];
   const home = ids[0];
@@ -474,6 +478,27 @@ function WorkerCard({
         <button type="button" className="worker-delete" title="Delete worker" aria-label={`Delete ${worker.name}`} onClick={onDelete}>
           ✕
         </button>
+      </div>
+
+      <div className="store-settings-row">
+        <span className="store-settings-label">Public link</span>
+        {worker.public_token ? (
+          <button
+            type="button"
+            className="btn btn-ghost"
+            onClick={() => {
+              const url = `${window.location.origin}/?view=${worker.public_token}`;
+              navigator.clipboard.writeText(url);
+              if (onToast) onToast(`Copied ${worker.name}'s schedule link`);
+            }}
+          >
+            Copy link
+          </button>
+        ) : (
+          <button type="button" className="btn btn-ghost" onClick={onGenerateToken}>
+            Generate link
+          </button>
+        )}
       </div>
 
       <div className="store-settings-row">
