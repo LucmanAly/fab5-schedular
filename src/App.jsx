@@ -1,69 +1,115 @@
-import { useEffect, useMemo, useState } from 'react';
-import { generateSchedule, dayLabels, formatWeek, nextMonday, EMPTY_WEEK, worksOn } from './lib/scheduler';
-import { compareWeeks } from './lib/scheduleDiff';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import {
+  generateSchedule,
+  computeViolations,
+  computeGaps,
+  violationKey,
+  violationMessage,
+  weekLoadFromSchedule,
+  dayLabels,
+  formatWeek,
+  mondayOf,
+  isMonday,
+  nextMonday,
+  DAY_NAMES,
+} from './lib/scheduler';
 import * as cloud from './lib/supabase';
-import { StepInit, StepConfigure } from './components/StepsSetup';
+import { seedStores, seedWorkers } from './lib/seed';
 import CheckGrid from './components/CheckGrid';
+import LockGrid from './components/LockGrid';
 import ScheduleView from './components/ScheduleView';
-import { HistoryPanel, DiagnosticsPanel, FinalizePanel, PrintOverlay } from './components/Overlays';
-import SettingsPanel from './components/SettingsPanel';
+import { DiagnosticsPanel, SaveSheet, PrintOverlay, ConfirmModal, UndoToast } from './components/Overlays';
+import SettingsPage from './components/SettingsPanel';
 
-const STEPS = ['Last week', 'Leave', 'Schedule'];
+const WIZARD_STEPS = ['Start date', 'Preferences', 'Review & save'];
 
-function resizeSetup(numStores, numFloats, prevStores, prevWorkers) {
-  const stores = Array.from({ length: numStores }, (_, i) => {
-    const id = i + 1;
-    return prevStores.find((s) => s.id === id) || { id, name: `Store ${id}` };
-  });
-  const mains = stores.map((s) => {
-    const prev = prevWorkers.find((w) => w.type === 'main' && w.store_id === s.id);
-    return prev || { id: 100 + s.id, name: `Main ${s.id}`, type: 'main', store_id: s.id };
-  });
-  const prevFloats = prevWorkers.filter((w) => w.type === 'float');
-  const floats = Array.from({ length: numFloats }, (_, i) => prevFloats[i] || { id: 200 + i + 1, name: `Float ${i + 1}`, type: 'float', store_id: null });
-  return { stores, workers: [...mains, ...floats] };
+const emptyWizard = () => ({
+  weekStart: nextMonday(),
+  leaves: {},
+  locks: {},
+  schedule: null,
+  splitTimes: {},
+  lastWeekLoad: {},
+  history: [],
+  v0: null, // snapshot of the freshly generated schedule (version stack §6.3)
+});
+
+const versionEntry = (schedule, splitTimes, leaves) => ({
+  schedule,
+  splitTimes,
+  leaves,
+  savedAt: new Date().toISOString(),
+});
+
+const sameVersion = (a, b) =>
+  !!a &&
+  !!b &&
+  JSON.stringify([a.schedule, a.splitTimes, a.leaves]) === JSON.stringify([b.schedule, b.splitTimes, b.leaves]);
+
+// No more Home screen — land wherever is most useful: an existing/previewed
+// schedule first, otherwise Settings if setup isn't ready yet, otherwise
+// straight into building the first schedule.
+function pickLandingRoute(stores, workers, weeksList, viewing) {
+  const ready = stores.length > 0 && workers.length > 0 && workers.length >= stores.length;
+  if (weeksList.length || viewing) return 'viewer';
+  if (!ready) return 'settings';
+  return 'wizard';
 }
 
 export default function App() {
-  const [step, setStep] = useState(0);
-  const [cfg, setCfg] = useState({ numStores: 8, numFloats: 6, maxConsec: 3, weekStart: nextMonday() });
-  const [splitTimes, setSplitTimes] = useState({}); // { "storeId-dayIdx": "14:00" }
-  const [stores, setStores] = useState([]);
-  const [workers, setWorkers] = useState([]);
-  const [lastWeek, setLastWeek] = useState({});
-  const [lastWeekSource, setLastWeekSource] = useState(null);
-  const [leaves, setLeaves] = useState({});
-  const [schedule, setSchedule] = useState(null);
-  const [archivedSchedule, setArchivedSchedule] = useState(null); // previous week's schedule for comparison
-  const [predictability, setPredictability] = useState(null); // predictability score
-  const [scheduleStatus, setScheduleStatus] = useState('draft'); // draft | finalized
-  const [cloudStatus, setCloudStatus] = useState(cloud.enabled ? 'idle' : 'off');
-  const [weeksList, setWeeksList] = useState([]);
-  const [overlay, setOverlay] = useState(null); // 'history' | 'diag' | 'finalize'
-  const [viewing, setViewing] = useState(null); // archived read-only week
-  const [printMode, setPrintMode] = useState(null);
-  const [loading, setLoading] = useState(cloud.enabled);
-  const [finalizingWeek, setFinalizingWeek] = useState(false);
-  const [showSettings, setShowSettings] = useState(false);
+  const [navOpen, setNavOpen] = useState(false);
 
-  const labels = useMemo(() => dayLabels(cfg.weekStart), [cfg.weekStart]);
+  // Without cloud keys the app is local-only — start from the default seed
+  // setup instead of an empty one.
+  const [stores, setStores] = useState(() => (cloud.enabled ? [] : seedStores()));
+  const [workers, setWorkers] = useState(() => (cloud.enabled ? [] : seedWorkers()));
+  const [weeksList, setWeeksList] = useState([]);
+  const [route, setRoute] = useState(() => pickLandingRoute(stores, workers, weeksList, null)); // wizard | viewer | settings | history
+  const [loading, setLoading] = useState(cloud.enabled);
+  const [cloudStatus, setCloudStatus] = useState(cloud.enabled ? 'idle' : 'off');
+  const [overlay, setOverlay] = useState(null); // 'diag' | null
+  const [printMode, setPrintMode] = useState(null);
+  const [settingsPrompt, setSettingsPrompt] = useState(null);
+  const [toast, setToast] = useState(null); // Tier-2 undo toast (§8): { message, undo }
+  const [navConfirm, setNavConfirm] = useState(null); // pending nav action, if the wizard has unsaved progress
+
+  // Wizard state
+  const [wStep, setWStep] = useState(0);
+  const [wiz, setWiz] = useState(emptyWizard);
+  const [prefTab, setPrefTab] = useState('leave'); // leave | lock
+  const [genViolations, setGenViolations] = useState([]);
+  const [showGenBox, setShowGenBox] = useState(false);
+  const [genAttempts, setGenAttempts] = useState(0);
+  const [editConflict, setEditConflict] = useState(null); // { prev, prevLeaves?, added: [violations] }
+  const [generating, setGenerating] = useState(false);
+  const [saveOpen, setSaveOpen] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [collisionAsk, setCollisionAsk] = useState(false); // §6.1 same-week warning
+
+  // Viewer state — a saved week, editable (v4): version stack + Find Cover.
+  const [viewing, setViewing] = useState(null);
+  // { weekStart, leaves, locks, schedule, splitTimes, versions, idx, dirty, lastWeekLoad }
+  const [viewConflict, setViewConflict] = useState(null); // { prev, prevLeaves, added, thenSave }
+
+  const setupReady = stores.length > 0 && workers.length > 0 && workers.length >= stores.length;
+  const labels = useMemo(() => dayLabels(wiz.weekStart), [wiz.weekStart]);
 
   useEffect(() => {
     if (!cloud.enabled) return;
     (async () => {
       try {
-        const [{ config, stores: st, workers: wk }, weeks] = await Promise.all([cloud.loadSetup(), cloud.listWeeks()]);
-        if (config) {
-          setCfg((c) => ({
-            ...c,
-            numStores: config.num_stores,
-            numFloats: config.num_floats,
-            maxConsec: config.max_consecutive,
-          }));
+        let [{ stores: st, workers: wk }, weeks] = await Promise.all([cloud.loadSetup(), cloud.listWeeks()]);
+        if (st.length === 0 && wk.length === 0) {
+          // Fresh/empty database — populate the default seed setup once so the
+          // admin doesn't have to enter it by hand (same data as the SQL seed).
+          st = seedStores();
+          wk = seedWorkers();
+          await cloud.saveSetup(st, wk);
         }
-        if (st.length) setStores(st);
-        if (wk.length) setWorkers(wk);
+        setStores(st);
+        setWorkers(wk);
         setWeeksList(weeks);
+        setRoute(pickLandingRoute(st, wk, weeks, null));
         setCloudStatus('saved');
       } catch (e) {
         console.error(e);
@@ -74,11 +120,17 @@ export default function App() {
     })();
   }, []);
 
+  // Serialized so that several instant-saves fired close together (e.g.
+  // tabbing through Settings fields) run their delete-and-reinsert requests
+  // strictly in order instead of racing/interleaving.
+  const saveQueueRef = useRef(Promise.resolve());
   async function withSave(fn) {
     if (!cloud.enabled) return;
     setCloudStatus('saving');
+    const run = saveQueueRef.current.then(fn);
+    saveQueueRef.current = run.catch(() => {});
     try {
-      await fn();
+      await run;
       setCloudStatus('saved');
     } catch (e) {
       console.error(e);
@@ -86,121 +138,388 @@ export default function App() {
     }
   }
 
-  const persistWeek = (patch = {}) =>
-    withSave(async () => {
-      await cloud.saveWeek(cfg.weekStart, {
-        status: schedule || patch.schedule ? 'scheduled' : 'draft',
-        lastWeek,
-        leaves,
-        schedule: schedule || {},
-        ...patch,
-      });
-      setWeeksList(await cloud.listWeeks());
-    });
-
-  async function prefillLastWeek() {
-    if (!cloud.enabled) return;
-    const prior = weeksList.find((w) => w.week_start < cfg.weekStart);
-    if (!prior) return;
-    try {
-      const data = await cloud.loadWeek(prior.week_start);
-      if (!data) return;
-      const worked = {};
-      workers.forEach((w) => {
-        worked[w.id] = (data.schedule[w.id] || EMPTY_WEEK()).map((_, d) => worksOn(data.schedule[w.id], d));
-      });
-      setLastWeek(worked);
-      setLastWeekSource(prior.week_start);
-      // Store full schedule for predictability comparison
-      setArchivedSchedule(data.schedule);
-    } catch (e) {
-      console.error(e);
-    }
+  function showToast(message, undo) {
+    setToast({ message, undo });
   }
 
-  async function next() {
-    if (step === 0) {
-      // Step 0: Load last week
-      await prefillLastWeek();
-      persistWeek();
-      setStep(1);
-    } else if (step === 1) {
-      // Step 1: Leaves set, move to schedule generation
-      persistWeek();
-      setStep(2);
-    } else if (step === 2) {
-      // Step 2: Generate schedule
-      const fresh = generateSchedule({ stores, workers, leaves, lastWeekWorked: lastWeek, maxConsec: cfg.maxConsec });
-      setSchedule(fresh);
-      setScheduleStatus('draft');
-      const pred = compareWeeks(archivedSchedule || {}, fresh, workers);
-      setPredictability(pred);
-      persistWeek({ schedule: fresh });
-    }
+  function go(nextRoute) {
+    setRoute(nextRoute);
+    setNavOpen(false);
+    setPrintMode(null); // leaving via the sidebar exits print mode too, not just the route
+    if (nextRoute !== 'settings') setSettingsPrompt(null);
   }
 
-  function regenerate() {
-    const fresh = generateSchedule({ stores, workers, leaves, lastWeekWorked: lastWeek, maxConsec: cfg.maxConsec });
-    setSchedule(fresh);
-    setScheduleStatus('draft');
-    const pred = compareWeeks(archivedSchedule || {}, fresh, workers);
-    setPredictability(pred);
-    persistWeek({ schedule: fresh });
+  // Where "Cancel"/"leave this screen" actions land now that there's no Home
+  // to return to: an existing schedule if there is one, otherwise Settings.
+  function leaveTo() {
+    return weeksList.length || viewing ? 'viewer' : 'settings';
   }
 
-  function editSchedule(nextSchedule) {
-    setSchedule(nextSchedule);
-    setScheduleStatus('draft'); // editing reverts to draft
-    if (!cloud.enabled) return;
-    setCloudStatus('saving');
-    cloud
-      .saveWeek(cfg.weekStart, { status: 'draft', lastWeek, leaves, schedule: nextSchedule })
-      .then(() => setCloudStatus('saved'))
-      .catch((e) => {
-        console.error(e);
-        setCloudStatus('error');
-      });
+  // A wizard past step 0 has real, unsaved work (leaves/locks/a generated
+  // schedule). Leaving via the sidebar without saving would silently discard
+  // it, so those navigations get routed through this instead of `go`/onClick
+  // directly.
+  function guardedNav(action) {
+    if (route === 'wizard' && wStep > 0) setNavConfirm(() => action);
+    else action();
   }
 
-  async function openArchivedWeek(weekStart) {
-    setOverlay(null);
-    if (weekStart === cfg.weekStart) {
-      setViewing(null);
+  // ---------- landing actions ----------
+
+  function startNewSchedule() {
+    if (!setupReady) {
+      setSettingsPrompt(
+        stores.length === 0
+          ? 'Add your stores first, then add workers and link them to stores. After that you can create a schedule.'
+          : workers.length === 0
+            ? 'Add your workers and link them to stores. After that you can create a schedule.'
+            : `You have ${workers.length} worker${workers.length === 1 ? '' : 's'} for ${stores.length} stores. You need at least as many workers as stores to build a schedule.`
+      );
+      go('settings');
       return;
     }
+    setWiz(emptyWizard());
+    setWStep(0);
+    setPrefTab('leave');
+    setGenViolations([]);
+    setShowGenBox(false);
+    setGenAttempts(0);
+    setEditConflict(null);
+    setCollisionAsk(false);
+    go('wizard');
+  }
+
+  async function openWeek(weekStart) {
+    if (!cloud.enabled) return;
     try {
       const data = await cloud.loadWeek(weekStart);
-      if (data) setViewing(data);
+      if (data) {
+        // Streak context for edits: the week immediately before this one.
+        let lastWeekLoad = {};
+        const prior = weeksList.find((w) => w.week_start < weekStart);
+        if (prior) {
+          try {
+            const pdata = await cloud.loadWeek(prior.week_start);
+            if (pdata) lastWeekLoad = weekLoadFromSchedule(pdata.schedule);
+          } catch (e) {
+            console.error(e);
+          }
+        }
+        const versions = (data.versions || []).length
+          ? data.versions
+          : [versionEntry(data.schedule, data.splitTimes, data.leaves)];
+        setViewing({
+          weekStart,
+          leaves: data.leaves,
+          locks: data.locks || {},
+          schedule: data.schedule,
+          splitTimes: data.splitTimes || {},
+          versions,
+          idx: versions.length - 1,
+          dirty: false,
+          lastWeekLoad,
+        });
+        setViewConflict(null);
+        go('viewer');
+      }
     } catch (e) {
       console.error(e);
       setCloudStatus('error');
     }
   }
 
-  async function finalizeSchedule() {
-    setFinalizingWeek(true);
+  function viewCurrent() {
+    if (weeksList.length) openWeek(weeksList[0].week_start);
+    else if (viewing) go('viewer');
+  }
+
+  // ---------- wizard: preferences ----------
+
+  function setLeaves(next) {
+    // Tier 2 (§8): clearing a leave request gets an undo toast.
+    const prevLeaves = wiz.leaves;
+    for (const [wid, days] of Object.entries(prevLeaves)) {
+      (days || []).forEach((on, d) => {
+        if (on && !(next[wid] && next[wid][d])) {
+          const worker = workers.find((x) => String(x.id) === String(wid));
+          if (worker) {
+            showToast(`Cleared ${worker.name}'s leave request (${DAY_NAMES[d]})`, () =>
+              setWiz((cur) => ({ ...cur, leaves: prevLeaves }))
+            );
+          }
+        }
+      });
+    }
+    setWiz((w) => {
+      // A leave and a lock on the same cell contradict each other — leave wins here.
+      const locks = { ...w.locks };
+      for (const [wid, days] of Object.entries(next)) {
+        if (!locks[wid]) continue;
+        const row = [...locks[wid]];
+        let changed = false;
+        (days || []).forEach((on, d) => {
+          if (on && row[d] != null) {
+            row[d] = null;
+            changed = true;
+          }
+        });
+        if (changed) locks[wid] = row;
+      }
+      return { ...w, leaves: next, locks };
+    });
+  }
+
+  function setLock(workerId, dayIdx, storeId) {
+    // Tier 2 (§8): removing a lock gets an undo toast.
+    const prevLocks = wiz.locks;
+    const prevVal = prevLocks[workerId] ? prevLocks[workerId][dayIdx] : null;
+    if (storeId == null && prevVal != null) {
+      const worker = workers.find((x) => String(x.id) === String(workerId));
+      if (worker) {
+        showToast(`Removed ${worker.name}'s lock (${DAY_NAMES[dayIdx]})`, () =>
+          setWiz((cur) => ({ ...cur, locks: prevLocks }))
+        );
+      }
+    }
+    setWiz((w) => {
+      const locks = { ...w.locks };
+      const row = [...(locks[workerId] || [null, null, null, null, null, null, null])];
+      row[dayIdx] = storeId;
+      locks[workerId] = row;
+      const leaves = { ...w.leaves };
+      if (storeId != null && leaves[workerId] && leaves[workerId][dayIdx]) {
+        const lrow = [...leaves[workerId]];
+        lrow[dayIdx] = false; // a lock overrides a leave request on the same day
+        leaves[workerId] = lrow;
+      }
+      return { ...w, locks, leaves };
+    });
+  }
+
+  // ---------- wizard: generation ----------
+
+  // §6.1: schedule identity is the calendar week — starting the wizard on an
+  // existing week warns before anything is generated.
+  function nextFromDate() {
+    if (weeksList.some((w) => w.week_start === wiz.weekStart)) {
+      setCollisionAsk(true);
+      return;
+    }
+    setWStep(1);
+  }
+
+  async function generate() {
+    setGenerating(true);
     try {
-      await cloud.saveWeek(cfg.weekStart, { status: 'finalized', lastWeek, leaves, schedule });
-      setScheduleStatus('finalized');
-      setWeeksList(await cloud.listWeeks());
-      setOverlay(null);
+      let load = {};
+      const history = [];
+      if (cloud.enabled) {
+        // Up to the last 2 saved weeks before this one: streak tail from the
+        // nearest, off-day history (P9) needs both.
+        const prior = weeksList.filter((w) => w.week_start < wiz.weekStart).slice(0, 2);
+        for (const p of prior) {
+          try {
+            const data = await cloud.loadWeek(p.week_start);
+            if (data) {
+              history.push(data.schedule);
+              if (!Object.keys(load).length) load = weekLoadFromSchedule(data.schedule);
+            }
+          } catch (e) {
+            console.error('Could not load prior week:', e);
+          }
+        }
+      }
+      // generateSchedule returns the splitTimes it was built on — time-range
+      // leaves/locks seed changeover overrides, so display must match.
+      const { schedule, violations, splitTimes } = generateSchedule({
+        stores,
+        workers,
+        leaves: wiz.leaves,
+        locks: wiz.locks,
+        lastWeekLoad: load,
+        history,
+      });
+      setWiz((w) => ({
+        ...w,
+        schedule,
+        lastWeekLoad: load,
+        history,
+        splitTimes,
+        v0: versionEntry(schedule, splitTimes, w.leaves),
+      }));
+      setGenViolations(violations);
+      setShowGenBox(violations.length > 0);
+      setGenAttempts((n) => n + 1);
+      setEditConflict(null);
+      setWStep(2);
+    } finally {
+      setGenerating(false);
+    }
+  }
+
+  // Generation is deterministic, so re-running it with unchanged inputs always
+  // reproduces v0 — the only real effect is discarding manual edits. The
+  // button says exactly that ("Reset to generated") and is disabled while the
+  // schedule is still pristine.
+  function resetToGenerated() {
+    const { schedule, violations, splitTimes } = generateSchedule({
+      stores,
+      workers,
+      leaves: wiz.leaves,
+      locks: wiz.locks,
+      lastWeekLoad: wiz.lastWeekLoad,
+      history: wiz.history,
+    });
+    setWiz((w) => ({ ...w, schedule, splitTimes, v0: versionEntry(schedule, splitTimes, w.leaves) }));
+    setGenViolations(violations);
+    setShowGenBox(violations.length > 0);
+    setEditConflict(null);
+  }
+
+  const wizPristine =
+    wiz.v0 && wiz.schedule
+      ? sameVersion(wiz.v0, versionEntry(wiz.schedule, wiz.splitTimes, wiz.leaves))
+      : true;
+
+  // ---------- wizard: manual edits ----------
+  // Manual edits are never blocked. New P1–P5 violations warn + confirm;
+  // P6–P9 breaks go through silently (they're simply not checked here).
+
+  function editSchedule(next) {
+    const ctx = { stores, workers, locks: wiz.locks, leaves: wiz.leaves, splitTimes: wiz.splitTimes };
+    const beforeKeys = new Set(computeViolations(wiz.schedule, ctx).map(violationKey));
+    const added = computeViolations(next, ctx).filter((v) => !beforeKeys.has(violationKey(v)));
+    if (added.length) setEditConflict({ prev: wiz.schedule, added });
+    setWiz((w) => ({ ...w, schedule: next }));
+  }
+
+  // ---------- save (wizard) ----------
+
+  const openSlots = wiz.schedule ? computeGaps(wiz.schedule, stores, workers).length : 0;
+
+  async function doSave() {
+    setSaving(true);
+    try {
+      // §6.3: v0 = the freshly generated schedule; this save is the next version.
+      const current = versionEntry(wiz.schedule, wiz.splitTimes, wiz.leaves);
+      const versions = (wiz.v0 && !sameVersion(wiz.v0, current) ? [wiz.v0, current] : [current]).slice(
+        -cloud.MAX_VERSIONS
+      );
+      if (cloud.enabled) {
+        setCloudStatus('saving');
+        await cloud.saveWeek(wiz.weekStart, {
+          leaves: wiz.leaves,
+          locks: wiz.locks,
+          schedule: wiz.schedule,
+          splitTimes: wiz.splitTimes,
+          versions,
+        });
+        setWeeksList(await cloud.listWeeks());
+        setCloudStatus('saved');
+      }
+      setSaveOpen(false);
+      setViewing({
+        weekStart: wiz.weekStart,
+        leaves: wiz.leaves,
+        locks: wiz.locks,
+        schedule: wiz.schedule,
+        splitTimes: wiz.splitTimes,
+        versions,
+        idx: versions.length - 1,
+        dirty: false,
+        lastWeekLoad: wiz.lastWeekLoad,
+      });
+      setViewConflict(null);
+      go('viewer');
     } catch (e) {
       console.error(e);
       setCloudStatus('error');
     } finally {
-      setFinalizingWeek(false);
+      setSaving(false);
     }
   }
 
-  function handleSaveSettings(newCfg, newStores, newWorkers) {
-    setCfg(newCfg);
+  function handleSaveSettings(newStores, newWorkers) {
     setStores(newStores);
     setWorkers(newWorkers);
-    withSave(() => cloud.saveSetup(newCfg, newStores, newWorkers));
+    withSave(() => cloud.saveSetup(newStores, newWorkers));
   }
 
-  const shown = viewing || { weekStart: cfg.weekStart, schedule, leaves };
-  const shownLabels = viewing ? dayLabels(viewing.weekStart) : labels;
+  // ---------- viewer: versions, edits, Find Cover ----------
+
+  function gotoVersion(idx) {
+    setViewing((v) => {
+      const entry = v.versions[idx];
+      if (!entry) return v;
+      return {
+        ...v,
+        idx,
+        schedule: entry.schedule,
+        splitTimes: entry.splitTimes || {},
+        leaves: entry.leaves || v.leaves,
+        dirty: false,
+      };
+    });
+    setViewConflict(null);
+  }
+
+  function viewerEdit(next, { leaves: nextLeaves } = {}) {
+    setViewing((v) => {
+      const ctx = { stores, workers, locks: v.locks, leaves: v.leaves, splitTimes: v.splitTimes };
+      const beforeKeys = new Set(computeViolations(v.schedule, ctx).map(violationKey));
+      const added = computeViolations(next, { ...ctx, leaves: nextLeaves || v.leaves }).filter(
+        (x) => !beforeKeys.has(violationKey(x))
+      );
+      if (added.length) setViewConflict({ prev: v.schedule, prevLeaves: v.leaves, added });
+      return { ...v, schedule: next, leaves: nextLeaves || v.leaves, dirty: true };
+    });
+  }
+
+  async function saveViewer(view) {
+    const v = view || viewing;
+    if (!v) return;
+    // Linear history (§6.3): saving from an earlier version discards everything
+    // after it; the stack is capped at 5, oldest dropped on overflow.
+    const current = versionEntry(v.schedule, v.splitTimes, v.leaves);
+    let versions = v.versions.slice(0, v.idx + 1);
+    if (!sameVersion(versions[versions.length - 1], current)) versions = versions.concat([current]);
+    versions = versions.slice(-cloud.MAX_VERSIONS);
+    setViewing({ ...v, versions, idx: versions.length - 1, dirty: false });
+    setViewConflict(null);
+    await withSave(async () => {
+      await cloud.saveWeek(v.weekStart, {
+        leaves: v.leaves,
+        locks: v.locks,
+        schedule: v.schedule,
+        splitTimes: v.splitTimes,
+        versions,
+      });
+      setWeeksList(await cloud.listWeeks());
+    });
+  }
+
+  // Find Cover direct/chain apply (§7): swap in, record leave, re-check, re-save.
+  function applyCover({ schedule: nextSched, leaves: nextLeaves, description }) {
+    const v = viewing;
+    const ctx = { stores, workers, locks: v.locks, leaves: v.leaves, splitTimes: v.splitTimes };
+    const beforeKeys = new Set(computeViolations(v.schedule, ctx).map(violationKey));
+    const added = computeViolations(nextSched, { ...ctx, leaves: nextLeaves }).filter(
+      (x) => !beforeKeys.has(violationKey(x))
+    );
+    const nextView = { ...v, schedule: nextSched, leaves: nextLeaves, dirty: true };
+    setViewing(nextView);
+    if (added.length) {
+      // P1–P5 break → warn + confirm before it lands (P6–P9 never get here).
+      setViewConflict({ prev: v.schedule, prevLeaves: v.leaves, added, thenSave: true });
+    } else {
+      showToast(`Applied: ${description}`);
+      saveViewer(nextView);
+    }
+  }
+
+  const previewingOld = viewing && viewing.idx < viewing.versions.length - 1;
+
+  // ---------- render ----------
 
   const badge = {
     off: ['badge-off', 'Local only'],
@@ -210,23 +529,47 @@ export default function App() {
     error: ['badge-error', 'Cloud error'],
   }[cloudStatus];
 
+  const navItems = [
+    { id: 'wizard', label: 'New schedule', icon: '📅', onClick: startNewSchedule },
+    { id: 'viewer', label: 'Current Schedule', icon: '🗂', onClick: viewCurrent, disabled: !weeksList.length && !viewing },
+    { id: 'history', label: 'History', icon: '📜', onClick: () => go('history'), disabled: weeksList.length < 2 },
+    { id: 'settings', label: 'Settings', icon: '⚙️' },
+  ];
+
   return (
-    <>
-      <div className="app">
-        <header className="topbar">
+    <div className="app shell">
+        <header className="topbar mobile-only">
+          <button type="button" className="nav-burger" aria-label="Menu" onClick={() => setNavOpen(!navOpen)}>
+            ☰
+          </button>
           <div className="brand">
             <span className="brand-mark">SHIFT</span>
             <span className="brand-sub">BOARD</span>
           </div>
-          <div className="topbar-right">
-            <button
-              type="button"
-              className="btn btn-ghost btn-light"
-              onClick={() => setShowSettings(true)}
-              title="Schedule settings"
-            >
-              ⚙️ Settings
-            </button>
+        </header>
+
+        {navOpen && <div className="nav-backdrop mobile-only" onClick={() => setNavOpen(false)} />}
+
+        <aside className={`sidebar ${navOpen ? 'open' : ''}`}>
+          <div className="brand sidebar-brand">
+            <span className="brand-mark">SHIFT</span>
+            <span className="brand-sub">BOARD</span>
+          </div>
+          <nav className="sidenav" aria-label="Main">
+            {navItems.map((item) => (
+              <button
+                key={item.id}
+                type="button"
+                className={`sidenav-item ${route === item.id ? 'active' : ''}`}
+                disabled={item.disabled}
+                onClick={() => guardedNav(item.onClick ? item.onClick : () => go(item.id))}
+              >
+                <span className="sidenav-icon" aria-hidden>{item.icon}</span>
+                {item.label}
+              </button>
+            ))}
+          </nav>
+          <div className="sidebar-foot">
             <button
               type="button"
               className={`badge ${badge[0]}`}
@@ -235,144 +578,347 @@ export default function App() {
             >
               {badge[1]}
             </button>
-            {cloud.enabled && (
-              <button type="button" className="btn btn-ghost btn-light" onClick={() => setOverlay('history')}>
-                History
-              </button>
-            )}
           </div>
-        </header>
+        </aside>
 
-        <div className="week-stamp-bar">Week of {formatWeek(shown.weekStart)}</div>
-
-        {viewing ? (
-          <main className="main">
-            <div className="banner banner-archive">
-              <span>Archived week of {formatWeek(viewing.weekStart)} — read-only.</span>
-              <button type="button" className="btn btn-ghost" onClick={() => setViewing(null)}>
-                Back to current
-              </button>
+        <main className="main">
+          {loading ? (
+            <div className="panel">
+              <p className="hint">Loading your saved setup…</p>
             </div>
-            <ScheduleView
+          ) : printMode && viewing ? (
+            <PrintOverlay
+              mode={printMode}
+              weekStart={viewing.weekStart}
               stores={stores}
               workers={workers}
-              schedule={viewing.schedule}
-              leaves={viewing.leaves}
-              lastWeek={viewing.lastWeek}
-              maxConsec={cfg.maxConsec}
-              splitTime={cfg.splitTime}
-              labels={shownLabels}
-              readOnly
-              onChange={() => {}}
+              schedule={viewing.schedule || {}}
+              leaves={viewing.leaves || {}}
+              labels={dayLabels(viewing.weekStart)}
+              splitTimes={viewing.splitTimes || {}}
+              onClose={() => setPrintMode(null)}
             />
-            <div className="actions">
-              <button type="button" className="btn" onClick={() => setPrintMode('worker')}>
-                Print by worker
-              </button>
-              <button type="button" className="btn" onClick={() => setPrintMode('store')}>
-                Print by store
-              </button>
-            </div>
-          </main>
-        ) : (
-          <main className="main">
-            <nav className="steps" aria-label="Progress">
-              {STEPS.map((s, i) => (
-                <button
-                  key={s}
-                  type="button"
-                  className={`step ${i === step ? 'current' : ''} ${i < step ? 'done' : ''}`}
-                  onClick={() => i < step && setStep(i)}
-                  disabled={i > step}
-                >
-                  <span className="step-n">{i + 1}</span>
-                  <span className="step-label">{s}</span>
-                </button>
-              ))}
-            </nav>
+          ) : (
+            <>
+              {route === 'settings' && (
+                <SettingsPage
+                  stores={stores}
+                  workers={workers}
+                  prompt={settingsPrompt}
+                  onSave={handleSaveSettings}
+                  onToast={showToast}
+                />
+              )}
 
-            {loading ? (
-              <div className="panel">
-                <p className="hint">Loading your saved setup…</p>
-              </div>
-            ) : (
-              <>
-                {step === 0 && (
-                  <div className="panel">
-                    <h2>Who worked last week?</h2>
-                    <p className="hint">
-                      {lastWeekSource
-                        ? `Loaded from the archived week of ${formatWeek(lastWeekSource)}. Adjust if needed.`
-                        : 'Tick the days each person worked, so rest days carry across the week boundary.'}
-                    </p>
-                    <CheckGrid workers={workers} labels={labels} value={lastWeek} onChange={setLastWeek} tone="worked" />
+              {route === 'history' && (
+                <div className="panel settings-section">
+                  <h1 className="page-title">History</h1>
+                  <p className="settings-hint">
+                    The two weeks before your current schedule. Tap one to view or edit it.
+                  </p>
+                  {weeksList.slice(1).length === 0 && <p className="settings-hint">Nothing here yet.</p>}
+                  <ul className="picker">
+                    {weeksList.slice(1).map((w) => (
+                      <li key={w.week_start}>
+                        <button type="button" className="pick pick-row" onClick={() => openWeek(w.week_start)}>
+                          <span className="pick-name">Week of {formatWeek(w.week_start)}</span>
+                          <span className="pick-status">view</span>
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+
+              {route === 'viewer' && viewing && (
+                <>
+                  <div className="week-stamp-bar viewer-stamp">
+                    <span>
+                      Week of {formatWeek(viewing.weekStart)} —{' '}
+                      {viewing.dirty ? 'edited (unsaved)' : previewingOld ? 'previewing' : 'saved'}
+                    </span>
                   </div>
-                )}
-                {step === 1 && (
-                  <div className="panel">
-                    <h2>Leave requests</h2>
-                    <p className="hint">Tick each person's days off. The generator plans around them.</p>
-                    <CheckGrid workers={workers} labels={labels} value={leaves} onChange={setLeaves} tone="leave" />
-                  </div>
-                )}
-                {step === 2 && schedule && (
+
+                  {previewingOld && !viewing.dirty && (
+                    <div className="banner banner-bad">
+                      Previewing version v{viewing.idx} — the published schedule is v{viewing.versions.length - 1}.
+                      Saving makes this version live and discards the later ones.
+                    </div>
+                  )}
+
+                  {viewConflict && (
+                    <ViolationBox
+                      title="This change breaks a protected rule (P1–P5)"
+                      violations={viewConflict.added}
+                      stores={stores}
+                      workers={workers}
+                      actions={[
+                        {
+                          label: viewConflict.thenSave ? 'Apply anyway & save' : 'Keep my change',
+                          onClick: () => {
+                            const willSave = viewConflict.thenSave;
+                            setViewConflict(null);
+                            if (willSave) saveViewer();
+                          },
+                        },
+                        {
+                          label: 'Undo the change',
+                          ghost: true,
+                          onClick: () => {
+                            setViewing((v) => ({
+                              ...v,
+                              schedule: viewConflict.prev,
+                              leaves: viewConflict.prevLeaves || v.leaves,
+                            }));
+                            setViewConflict(null);
+                          },
+                        },
+                      ]}
+                    />
+                  )}
+
                   <ScheduleView
                     stores={stores}
                     workers={workers}
-                    schedule={schedule}
-                    leaves={leaves}
-                    lastWeek={lastWeek}
-                    maxConsec={cfg.maxConsec}
-                    labels={labels}
-                    readOnly={false}
-                    onChange={editSchedule}
-                    predictability={predictability}
-                    status={scheduleStatus}
-                    splitTimes={splitTimes}
-                    onSplitTimesChange={setSplitTimes}
+                    schedule={viewing.schedule}
+                    leaves={viewing.leaves}
+                    locks={viewing.locks || {}}
+                    lastWeekLoad={viewing.lastWeekLoad || {}}
+                    labels={dayLabels(viewing.weekStart)}
+                    splitTimes={viewing.splitTimes || {}}
+                    saved
+                    onChange={viewerEdit}
+                    onSplitTimesChange={(st) => setViewing((v) => ({ ...v, splitTimes: st, dirty: true }))}
+                    onCoverApply={applyCover}
+                    onToast={showToast}
                   />
-                )}
+                  <div className="actions">
+                    <button type="button" className="btn" onClick={() => setPrintMode('worker')}>
+                      Print by worker
+                    </button>
+                    <button type="button" className="btn" onClick={() => setPrintMode('store')}>
+                      Print by store
+                    </button>
+                    <span className="version-nav">
+                      {viewing.idx > 0 && (
+                        <button
+                          type="button"
+                          className="version-arrow"
+                          aria-label="Earlier version"
+                          onClick={() => gotoVersion(viewing.idx - 1)}
+                        >
+                          ◄
+                        </button>
+                      )}
+                      <span className="version-label">v{viewing.idx}</span>
+                      {viewing.idx < viewing.versions.length - 1 && (
+                        <button
+                          type="button"
+                          className="version-arrow"
+                          aria-label="Later version"
+                          onClick={() => gotoVersion(viewing.idx + 1)}
+                        >
+                          ►
+                        </button>
+                      )}
+                    </span>
+                    {(viewing.dirty || previewingOld) && (
+                      <button type="button" className="btn btn-primary" onClick={() => saveViewer()}>
+                        {viewing.dirty ? '✓ Save changes' : `✓ Publish v${viewing.idx}`}
+                      </button>
+                    )}
+                  </div>
+                </>
+              )}
 
-                <div className="actions">
-                  {step > 0 && (
-                    <button type="button" className="btn btn-ghost" onClick={() => setStep(step - 1)}>
-                      Back
-                    </button>
-                  )}
-                  {step < 2 && (
-                    <button type="button" className="btn btn-primary" onClick={next}>
-                      {step === 1 ? 'Generate schedule' : 'Next'}
-                    </button>
-                  )}
-                  {step === 2 && (
-                    <>
-                      <button type="button" className="btn" onClick={regenerate}>
-                        Regenerate
-                      </button>
-                      <button type="button" className="btn" onClick={() => setPrintMode('worker')}>
-                        Print by worker
-                      </button>
-                      <button type="button" className="btn" onClick={() => setPrintMode('store')}>
-                        Print by store
-                      </button>
+              {route === 'wizard' && (
+                <>
+                  <div className="week-stamp-bar">Week of {formatWeek(wiz.weekStart)}</div>
+                  <nav className="steps" aria-label="Progress">
+                    {WIZARD_STEPS.map((s, i) => (
                       <button
+                        key={s}
                         type="button"
-                        className="btn btn-primary"
-                        onClick={() => setOverlay('finalize')}
+                        className={`step ${i === wStep ? 'current' : ''} ${i < wStep ? 'done' : ''}`}
+                        onClick={() => i < wStep && setWStep(i)}
+                        disabled={i > wStep}
                       >
-                        ✓ Finalize Schedule
+                        <span className="step-n">{i + 1}</span>
+                        <span className="step-label">{s}</span>
                       </button>
+                    ))}
+                  </nav>
+
+                  {wStep === 0 && (
+                    <div className="panel">
+                      <h2>Pick the start date</h2>
+                      <p className="hint">Schedules always run Monday to Sunday.</p>
+                      <div className="field">
+                        <label>
+                          <span>Week starting (Monday)</span>
+                          <input
+                            type="date"
+                            value={wiz.weekStart}
+                            onChange={(e) => {
+                              const v = e.target.value;
+                              if (!v) return;
+                              setWiz((w) => ({ ...w, weekStart: isMonday(v) ? v : mondayOf(v) }));
+                            }}
+                          />
+                          <small>
+                            Building the week of {formatWeek(wiz.weekStart)}. Picking any other day snaps to that
+                            week&rsquo;s Monday.
+                          </small>
+                        </label>
+                      </div>
+                      <div className="actions">
+                        <button type="button" className="btn btn-ghost" onClick={() => go(leaveTo())}>
+                          Cancel
+                        </button>
+                        <button type="button" className="btn btn-primary" onClick={nextFromDate}>
+                          Next
+                        </button>
+                      </div>
+                    </div>
+                  )}
+
+                  {wStep === 1 && (
+                    <div className="panel">
+                      <h2>Preferences</h2>
+                      <p className="hint">
+                        Leave = days someone can&rsquo;t work. Lock = days someone is guaranteed at a specific store.
+                      </p>
+                      <div className="view-toggle pref-toggle" role="tablist" aria-label="Preference type">
+                        <button
+                          type="button"
+                          role="tab"
+                          aria-selected={prefTab === 'leave'}
+                          className={prefTab === 'leave' ? 'active' : ''}
+                          onClick={() => setPrefTab('leave')}
+                        >
+                          Leave requests
+                        </button>
+                        <button
+                          type="button"
+                          role="tab"
+                          aria-selected={prefTab === 'lock'}
+                          className={prefTab === 'lock' ? 'active' : ''}
+                          onClick={() => setPrefTab('lock')}
+                        >
+                          Locks
+                        </button>
+                      </div>
+
+                      {prefTab === 'leave' ? (
+                        <CheckGrid workers={workers} labels={labels} value={wiz.leaves} onChange={setLeaves} tone="leave" />
+                      ) : (
+                        <LockGrid
+                          workers={workers}
+                          stores={stores}
+                          labels={labels}
+                          locks={wiz.locks}
+                          onSet={setLock}
+                        />
+                      )}
+
+                      <div className="actions">
+                        <button type="button" className="btn btn-ghost" onClick={() => setWStep(0)}>
+                          Back
+                        </button>
+                        <button type="button" className="btn btn-primary" onClick={generate} disabled={generating}>
+                          {generating ? 'Generating…' : 'Generate schedule'}
+                        </button>
+                      </div>
+                    </div>
+                  )}
+
+                  {wStep === 2 && wiz.schedule && (
+                    <>
+                      {showGenBox && (
+                        <ViolationBox
+                          title="The generator couldn't satisfy everything"
+                          violations={genViolations}
+                          stores={stores}
+                          workers={workers}
+                          exhausted={genAttempts >= 3}
+                          actions={[
+                            { label: 'Continue anyway', onClick: () => setShowGenBox(false) },
+                            {
+                              label: 'Go back & adjust preferences',
+                              ghost: true,
+                              onClick: () => {
+                                setShowGenBox(false);
+                                setWStep(1);
+                              },
+                            },
+                          ]}
+                        />
+                      )}
+
+                      {editConflict && (
+                        <ViolationBox
+                          title="This edit breaks a protected rule (P1–P5)"
+                          violations={editConflict.added}
+                          stores={stores}
+                          workers={workers}
+                          actions={[
+                            { label: 'Keep my change', onClick: () => setEditConflict(null) },
+                            {
+                              label: 'Undo the change',
+                              ghost: true,
+                              onClick: () => {
+                                setWiz((w) => ({ ...w, schedule: editConflict.prev }));
+                                setEditConflict(null);
+                              },
+                            },
+                          ]}
+                        />
+                      )}
+
+                      <ScheduleView
+                        stores={stores}
+                        workers={workers}
+                        schedule={wiz.schedule}
+                        leaves={wiz.leaves}
+                        locks={wiz.locks}
+                        lastWeekLoad={wiz.lastWeekLoad}
+                        labels={labels}
+                        splitTimes={wiz.splitTimes}
+                        readOnly={false}
+                        onChange={editSchedule}
+                        onSplitTimesChange={(st) => setWiz((w) => ({ ...w, splitTimes: st }))}
+                        onToast={showToast}
+                      />
+
+                      <div className="actions">
+                        <button type="button" className="btn btn-ghost" onClick={() => setWStep(1)}>
+                          Back
+                        </button>
+                        <button
+                          type="button"
+                          className="btn"
+                          disabled={wizPristine}
+                          title={
+                            wizPristine
+                              ? 'No manual edits to discard — this is the generated schedule'
+                              : 'Discard your manual edits and restore the auto-generated schedule'
+                          }
+                          onClick={resetToGenerated}
+                        >
+                          ↺ Reset to generated
+                        </button>
+                        <button type="button" className="btn btn-primary" onClick={() => setSaveOpen(true)}>
+                          ✓ Save schedule
+                        </button>
+                      </div>
                     </>
                   )}
-                </div>
-              </>
-            )}
-          </main>
-        )}
+                </>
+              )}
+            </>
+          )}
+        </main>
 
-        {overlay === 'history' && (
-          <HistoryPanel weeks={weeksList} currentWeek={cfg.weekStart} onLoad={openArchivedWeek} onClose={() => setOverlay(null)} />
-        )}
         {overlay === 'diag' && (
           <DiagnosticsPanel
             status={cloudStatus}
@@ -382,38 +928,78 @@ export default function App() {
             onClose={() => setOverlay(null)}
           />
         )}
-        {overlay === 'finalize' && (
-          <FinalizePanel
-            weekStart={cfg.weekStart}
-            predictability={predictability}
-            saving={finalizingWeek}
-            onFinalize={finalizeSchedule}
-            onCancel={() => setOverlay(null)}
+
+        {collisionAsk && (
+          <ConfirmModal
+            title="A schedule already exists for this week"
+            body={`The week of ${formatWeek(wiz.weekStart)} already has a saved schedule — generating a new one will replace it.`}
+            confirmLabel="Replace it"
+            onCancel={() => setCollisionAsk(false)}
+            onConfirm={() => {
+              setCollisionAsk(false);
+              setWStep(1);
+            }}
           />
         )}
 
-        <SettingsPanel
-          isOpen={showSettings}
-          cfg={cfg}
-          stores={stores}
-          workers={workers}
-          onSave={handleSaveSettings}
-          onClose={() => setShowSettings(false)}
+        {saveOpen && (
+          <SaveSheet
+            weekStart={wiz.weekStart}
+            openSlots={openSlots}
+            saving={saving}
+            onSave={doSave}
+            onCancel={() => setSaveOpen(false)}
+          />
+        )}
+
+        {navConfirm && (
+          <ConfirmModal
+            title="Leave without saving?"
+            body="This schedule hasn't been saved yet — leaving now discards everything you've entered."
+            confirmLabel="Leave without saving"
+            onCancel={() => setNavConfirm(null)}
+            onConfirm={() => {
+              const run = navConfirm;
+              setNavConfirm(null);
+              run();
+            }}
+          />
+        )}
+
+        <UndoToast
+          toast={toast}
+          onUndo={() => {
+            if (toast && toast.undo) toast.undo();
+            setToast(null);
+          }}
+          onExpire={() => setToast(null)}
         />
       </div>
+    );
+}
 
-      {printMode && (
-        <PrintOverlay
-          mode={printMode}
-          weekStart={shown.weekStart}
-          stores={stores}
-          workers={workers}
-          schedule={shown.schedule || {}}
-          leaves={shown.leaves || {}}
-          labels={shownLabels}
-          onClose={() => setPrintMode(null)}
-        />
+function ViolationBox({ title, violations, stores, workers, exhausted, actions }) {
+  return (
+    <div className="violation-box" role="alert">
+      <h3 className="violation-title">⚠ {title}</h3>
+      <ul className="violation-list">
+        {violations.map((v) => (
+          <li key={violationKey(v)}>{violationMessage(v, stores, workers)}</li>
+        ))}
+      </ul>
+      {exhausted && (
+        <p className="violation-final">
+          No valid schedule exists with the current stores, links, locks and leave requests — something has to give.
+          Consider adding workers, extra store links, or removing a lock or leave day.
+        </p>
       )}
-    </>
+      <div className="violation-actions">
+        {actions.map((a) => (
+          <button key={a.label} type="button" className={`btn ${a.ghost ? 'btn-ghost' : 'btn-primary'}`} onClick={a.onClick}>
+            {a.label}
+          </button>
+        ))}
+      </div>
+    </div>
   );
 }

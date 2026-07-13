@@ -1,26 +1,23 @@
-import { useState } from 'react';
-import { DAY_NAMES, workerAtHalf, formatWeek } from '../lib/scheduler';
+import { useEffect, useState } from 'react';
+import { DAY_NAMES, workerAtHalf, formatWeek, shiftTimeCompact } from '../lib/scheduler';
 
-export function HistoryPanel({ weeks, currentWeek, onLoad, onClose }) {
+/**
+ * Tier 1 destructive confirmation (§8) — for rare, hard-to-reverse deletes
+ * (whole worker / whole store). Reuses the violation-box styling so it reads
+ * as native, not a browser popup.
+ */
+export function ConfirmModal({ title, body, confirmLabel = 'Delete', onConfirm, onCancel }) {
   return (
-    <div className="modal-backdrop" onClick={onClose}>
-      <div className="modal sheet" role="dialog" aria-modal="true" onClick={(e) => e.stopPropagation()}>
-        <div className="sheet-grab" />
-        <h3>Schedule history</h3>
-        {weeks.length === 0 && <p className="hint">Nothing archived yet — every week you build is saved here.</p>}
-        <ul className="picker">
-          {weeks.map((w) => (
-            <li key={w.week_start}>
-              <button type="button" className="pick pick-row" onClick={() => onLoad(w.week_start)}>
-                <span className="pick-name">Week of {formatWeek(w.week_start)}</span>
-                <span className="pick-status">{w.week_start === currentWeek ? 'current' : w.status}</span>
-              </button>
-            </li>
-          ))}
-        </ul>
-        <div className="modal-actions">
-          <button type="button" className="btn btn-ghost" onClick={onClose}>
-            Close
+    <div className="modal-backdrop" onClick={onCancel}>
+      <div className="violation-box confirm-modal" role="alertdialog" aria-modal="true" onClick={(e) => e.stopPropagation()}>
+        <h3 className="violation-title">⚠ {title}</h3>
+        <p className="confirm-body">{body}</p>
+        <div className="violation-actions">
+          <button type="button" className="btn btn-ghost" onClick={onCancel}>
+            Cancel
+          </button>
+          <button type="button" className="btn btn-danger" onClick={onConfirm}>
+            {confirmLabel}
           </button>
         </div>
       </div>
@@ -28,46 +25,51 @@ export function HistoryPanel({ weeks, currentWeek, onLoad, onClose }) {
   );
 }
 
-export function FinalizePanel({ weekStart, predictability, saving, onFinalize, onCancel }) {
-  const gaps = predictability?.totalSlots || 0; // This is used to show if there are issues
+/**
+ * Tier 2 (§8) — undo toast for frequent low-stakes removals. The action has
+ * already been applied; the toast offers a ~5s window to reverse it.
+ */
+export function UndoToast({ toast, onUndo, onExpire }) {
+  useEffect(() => {
+    if (!toast) return undefined;
+    const t = setTimeout(onExpire, 5000);
+    return () => clearTimeout(t);
+  }, [toast, onExpire]);
+  if (!toast) return null;
+  return (
+    <div className="undo-toast" role="status">
+      <span className="undo-toast-msg">{toast.message}</span>
+      {toast.undo && (
+        <button type="button" className="undo-toast-btn" onClick={onUndo}>
+          Undo
+        </button>
+      )}
+    </div>
+  );
+}
+
+export function SaveSheet({ weekStart, openSlots, saving, onSave, onCancel }) {
   return (
     <div className="modal-backdrop" onClick={onCancel}>
       <div className="modal sheet" role="dialog" aria-modal="true" onClick={(e) => e.stopPropagation()}>
         <div className="sheet-grab" />
-        <h3>Finalize schedule?</h3>
-        <p className="hint">Once finalized, this schedule is locked. You can still view and print it, but changes require creating a new week.</p>
-
-        <div className="finalize-summary">
-          {predictability && (
-            <>
-              <div className="finalize-stat">
-                <span className="finalize-label">Similarity to last week:</span>
-                <span className="finalize-value">{predictability.similarityPercent}%</span>
-              </div>
-              <div className="finalize-stat">
-                <span className="finalize-label">Shifts assigned:</span>
-                <span className="finalize-value">{predictability.identicalSlots} of {predictability.totalSlots}</span>
-              </div>
-            </>
-          )}
-          <div className="finalize-stat">
-            <span className="finalize-label">Week starting:</span>
-            <span className="finalize-value">{formatWeek(weekStart)}</span>
-          </div>
-        </div>
-
-        <p className="hint" style={{ marginTop: '12px', fontWeight: 500 }}>
-          ✓ Review complete<br/>
-          ✓ All gaps are acceptable<br/>
-          ✓ Ready to publish
+        <h3>Save this schedule?</h3>
+        <p className="hint">
+          Saving commits the week of {formatWeek(weekStart)}, enables printing, and archives it. This becomes your
+          Current Schedule; the two weeks before it stay in History. Saving replaces the oldest.
         </p>
-
+        {openSlots > 0 && (
+          <p className="hint" style={{ color: 'var(--gap)', fontWeight: 600 }}>
+            ⚠ {openSlots} shift slot{openSlots > 1 ? 's are' : ' is'} still OPEN. You can save anyway and fill them on
+            paper, or go back and assign someone.
+          </p>
+        )}
         <div className="modal-actions">
           <button type="button" className="btn btn-ghost" onClick={onCancel} disabled={saving}>
             Keep editing
           </button>
-          <button type="button" className="btn btn-primary" onClick={onFinalize} disabled={saving}>
-            {saving ? 'Finalizing…' : 'Finalize Now'}
+          <button type="button" className="btn btn-primary" onClick={onSave} disabled={saving}>
+            {saving ? 'Saving…' : 'Save schedule'}
           </button>
         </div>
       </div>
@@ -123,10 +125,13 @@ export function DiagnosticsPanel({ status, diag, lastError, onTest, onClose }) {
           <summary>Common fixes</summary>
           <ol>
             <li>
-              After adding the two keys in Netlify, you must redeploy: <strong>Deploys → Trigger deploy → Clear cache and deploy site</strong>. Keys are baked in at build time, so a build from before you added them won't have them.
+              After adding the two keys in Netlify, you must redeploy: <strong>Deploys → Trigger deploy → Clear cache
+              and deploy site</strong>. Keys are baked in at build time, so a build from before you added them won't
+              have them.
             </li>
             <li>
-              Run <strong>supabase-setup.sql</strong> in Supabase (SQL Editor → New query → paste → Run). A missing-table error means this step was skipped or run in a different project.
+              Run <strong>supabase-setup.sql</strong> in Supabase (SQL Editor → New query → paste → Run). A
+              missing-table error means this step was skipped or run in a different project.
             </li>
             <li>Check the two variable names are exactly <code>VITE_SUPABASE_URL</code> and <code>VITE_SUPABASE_ANON_KEY</code>.</li>
             <li>Confirm the URL and key come from the same Supabase project (Settings → Data API for the URL, Settings → API Keys for the key).</li>
@@ -143,34 +148,55 @@ export function DiagnosticsPanel({ status, diag, lastError, onTest, onClose }) {
   );
 }
 
-function daySummaryByWorker(schedule, storeName, wId, d, leaves) {
+function daySummaryByWorker(schedule, stores, storeName, wId, d, leaves, splitTimes) {
   const s = (schedule[wId] && schedule[wId][d]) || { am: null, pm: null };
+  const byId = (id) => stores.find((st) => st.id === id);
   if (s.am == null && s.pm == null) return leaves[wId] && leaves[wId][d] ? 'LEAVE' : '—';
-  if (s.am != null && s.am === s.pm) return storeName(s.am);
-  const a = s.am != null ? storeName(s.am) : '—';
-  const p = s.pm != null ? storeName(s.pm) : '—';
-  return `AM ${a} / PM ${p}`;
+  if (s.am != null && s.am === s.pm) {
+    return `${storeName(s.am)} ${shiftTimeCompact(byId(s.am), d, 'full', splitTimes)}`;
+  }
+  const a = s.am != null ? `${storeName(s.am)} ${shiftTimeCompact(byId(s.am), d, 'am', splitTimes)}` : '—';
+  const p = s.pm != null ? `${storeName(s.pm)} ${shiftTimeCompact(byId(s.pm), d, 'pm', splitTimes)}` : '—';
+  return `${a} / ${p}`;
 }
 
-function daySummaryByStore(schedule, workers, storeId, d) {
-  const am = workerAtHalf(schedule, workers, storeId, d, 'am');
-  const pm = workerAtHalf(schedule, workers, storeId, d, 'pm');
-  if (am && pm && am.id === pm.id) return am.name;
-  const a = am ? am.name : 'OPEN';
-  const p = pm ? pm.name : 'OPEN';
+function daySummaryByStore(schedule, workers, store, d, splitTimes) {
+  const am = workerAtHalf(schedule, workers, store.id, d, 'am');
+  const pm = workerAtHalf(schedule, workers, store.id, d, 'pm');
+  if (am && pm && am.id === pm.id) return `${am.name} ${shiftTimeCompact(store, d, 'full', splitTimes)}`;
   if (!am && !pm) return 'OPEN';
-  return `AM ${a} / PM ${p}`;
+  const a = `${am ? am.name : 'OPEN'} ${shiftTimeCompact(store, d, 'am', splitTimes)}`;
+  const p = `${pm ? pm.name : 'OPEN'} ${shiftTimeCompact(store, d, 'pm', splitTimes)}`;
+  return `${a} / ${p}`;
 }
 
-export function PrintOverlay({ mode, weekStart, stores, workers, schedule, leaves, labels, onClose }) {
+export function PrintOverlay({ mode, weekStart, stores, workers, schedule, leaves, labels, splitTimes = {}, onClose }) {
   const storeName = (id) => (stores.find((s) => s.id === id) || {}).name || `Store ${id}`;
   const title = `Week of ${formatWeek(weekStart)}`;
+  // 'all' (default) or a single worker/store id — the collective print stays
+  // the default; one person's/store's sheet is a toolbar pick away.
+  const [only, setOnly] = useState('all');
+  const shownWorkers = only === 'all' ? workers : workers.filter((w) => String(w.id) === only);
+  const shownStores = only === 'all' ? stores : stores.filter((s) => String(s.id) === only);
 
   return (
     <div className="print-overlay">
       <div className="print-toolbar">
         <span>{mode === 'worker' ? 'Print by worker' : 'Print by store'} — {title}</span>
         <div className="print-toolbar-btns">
+          <select
+            className="print-scope"
+            value={only}
+            onChange={(e) => setOnly(e.target.value)}
+            aria-label={mode === 'worker' ? 'Which workers to print' : 'Which stores to print'}
+          >
+            <option value="all">{mode === 'worker' ? 'All workers' : 'All stores'}</option>
+            {(mode === 'worker' ? workers : stores).map((x) => (
+              <option key={x.id} value={String(x.id)}>
+                {x.name}
+              </option>
+            ))}
+          </select>
           <button type="button" className="btn btn-primary" onClick={() => window.print()}>
             Print / Save PDF
           </button>
@@ -183,12 +209,12 @@ export function PrintOverlay({ mode, weekStart, stores, workers, schedule, leave
       <div className="print-sheet">
         {mode === 'worker' ? (
           <>
-            <h1>Staff schedule — {title}</h1>
-            {workers.map((w) => (
+            <h1>
+              {only === 'all' ? 'Staff schedule' : `${shownWorkers[0] ? shownWorkers[0].name : ''} — schedule`} — {title}
+            </h1>
+            {shownWorkers.map((w) => (
               <section key={w.id} className="print-block">
-                <h2>
-                  {w.name} <em>({w.type === 'main' ? `main — ${storeName(w.store_id)}` : 'floating'})</em>
-                </h2>
+                <h2>{w.name}</h2>
                 <table>
                   <thead>
                     <tr>{labels.map((l) => <th key={l}>{l}</th>)}</tr>
@@ -196,7 +222,7 @@ export function PrintOverlay({ mode, weekStart, stores, workers, schedule, leave
                   <tbody>
                     <tr>
                       {DAY_NAMES.map((_, d) => (
-                        <td key={d}>{daySummaryByWorker(schedule, storeName, w.id, d, leaves)}</td>
+                        <td key={d}>{daySummaryByWorker(schedule, stores, storeName, w.id, d, leaves, splitTimes)}</td>
                       ))}
                     </tr>
                   </tbody>
@@ -206,8 +232,10 @@ export function PrintOverlay({ mode, weekStart, stores, workers, schedule, leave
           </>
         ) : (
           <>
-            <h1>Store coverage — {title}</h1>
-            {stores.map((s) => (
+            <h1>
+              {only === 'all' ? 'Store coverage' : `${shownStores[0] ? shownStores[0].name : ''} — coverage`} — {title}
+            </h1>
+            {shownStores.map((s) => (
               <section key={s.id} className="print-block">
                 <h2>{s.name}</h2>
                 <table>
@@ -217,7 +245,7 @@ export function PrintOverlay({ mode, weekStart, stores, workers, schedule, leave
                   <tbody>
                     <tr>
                       {DAY_NAMES.map((_, d) => (
-                        <td key={d}>{daySummaryByStore(schedule, workers, s.id, d)}</td>
+                        <td key={d}>{daySummaryByStore(schedule, workers, s, d, splitTimes)}</td>
                       ))}
                     </tr>
                   </tbody>

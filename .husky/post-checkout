@@ -1,0 +1,10 @@
+# Regenerate the code knowledge graph incrementally (Graphify).
+# Silently no-op on machines where graphify is not installed, and never
+# fail the git operation. Does NOT auto-commit the regenerated files —
+# GRAPH_REPORT.md / graph.json show up as normal working-tree changes.
+GRAPHIFY="$(command -v graphify 2>/dev/null || true)"
+[ -z "$GRAPHIFY" ] && [ -x "$HOME/.local/bin/graphify" ] && GRAPHIFY="$HOME/.local/bin/graphify"
+if [ -n "$GRAPHIFY" ]; then
+  "$GRAPHIFY" . --update --code-only >/dev/null 2>&1 || true
+fi
+true

@@ -3,3 +3,13 @@ dist
 .env
 .env.local
 .DS_Store
+
+# Graphify: cache + HTML viz are large/regenerable; GRAPH_REPORT.md and
+# graph.json ARE versioned so any session can read the graph's findings.
+graphify-out/cache/
+graphify-out/graph.html
+graphify-out/manifest.json
+graphify-out/.graphify_analysis.json
+graphify-out/.graphify_labels.json*
+# dated snapshot folders written by graphify --update (regenerable)
+graphify-out/20??-??-??/
