@@ -1,8 +1,8 @@
 # ShiftBoard — Functionality & Architecture
 
-*Version 4 · last updated 2026-07-10*
+*Version 4 (round 3: recurring patterns, admin auth, public worker links) · last updated 2026-07-13*
 
-ShiftBoard is a single-admin weekly staff scheduler for a small chain of stores. The admin defines stores and workers once, then each week picks a start date, enters leave requests and locks, auto-generates a schedule, hand-tunes it, and saves/prints it. After publication, the app helps handle real-world changes (someone calls off) with a "Find Cover" assistant. There is no login — it is an internal tool where the Supabase anon key has full read/write.
+ShiftBoard is a single-admin weekly staff scheduler for a small chain of stores. The admin defines stores and workers once, then each week picks a start date, enters leave requests and locks, auto-generates a schedule, hand-tunes it, and saves/prints it. After publication, the app helps handle real-world changes (someone calls off) with a "Find Cover" assistant. As of round 3, the admin signs in once per device (Supabase email/password auth) to read or change anything; the Supabase anon key is read-only, and each worker can get a permanent, unauthenticated, read-only link to their own current schedule (§8.8).
 
 ---
 
@@ -13,7 +13,7 @@ ShiftBoard is a single-admin weekly staff scheduler for a small chain of stores.
 | UI | React 18 + Vite 5 | No router; a single `route` state string (`home / wizard / viewer / settings`) |
 | Styling | One plain CSS file (`src/styles.css`) | CSS custom properties for the palette; mobile-first with a 720px desktop breakpoint |
 | Backend | Supabase (PostgREST only) | No Supabase SDK — a thin `fetch` wrapper talks to `/rest/v1/` directly |
-| Auth | None | RLS is enabled but every table grants the `anon` role full access |
+| Auth | Supabase Auth (email/password), `@supabase/auth-js` | The admin signs in once per browser; the session persists via localStorage and auto-refreshes. `anon` (unauthenticated, including public worker links) is read-only; `authenticated` (the signed-in admin) has full read/write. |
 | Hosting | Netlify (static build) | `VITE_SUPABASE_URL` / `VITE_SUPABASE_ANON_KEY` are baked in at build time |
 | Tests | Plain Node script | `npm test` runs `tests/scheduler.test.js` (no framework; PASS/FAIL lines + exit code) |
 
@@ -62,7 +62,7 @@ Five things cooperate to get a change from an idea to the live site:
 | **Claude Code** | Builder | Reads and edits the files on the laptop, runs the tests and builds, writes the SQL. Works from written specs (v3, v4) and conversation. | It doesn't deploy or push on its own — changes stay local until *you* commit/push (or ask it to). It has no access to the live Supabase data. |
 | **GitHub** | Source of truth + trigger | The repo `LucmanAly/fab5-schedular` (branch `main`) holds the committed history. Serves as the off-laptop backup and the thing Netlify watches. | It stores code only — no schedule data, no secrets (the Supabase keys are Netlify environment variables, not files in the repo). |
 | **Netlify** | Build & host | On every push to `main`, runs `npm run build` (per `netlify.toml`) and serves the static `dist/` output. Holds the two `VITE_SUPABASE_*` environment variables and bakes them into the JS at build time. The SPA redirect rule sends every URL to `index.html`. | It runs no server code — after the page loads, Netlify is out of the loop entirely. Changing an env var requires a redeploy ("Clear cache and deploy site") because the keys are baked in, not read live. |
-| **Supabase** | Database | The actual data: stores, workers, saved weeks, leaves, locks, schedules, version stacks. The browser talks to it directly via PostgREST (`/rest/v1/`) using the anon key — there is no backend of ours in between. Schema changes are applied by pasting `supabase-setup.sql` into its SQL Editor. | It holds no code and knows nothing about the app. RLS is enabled but the anon role has full read/write (single-admin internal tool, no login). |
+| **Supabase** | Database | The actual data: stores, workers, saved weeks, leaves, locks, schedules, version stacks. The browser talks to it directly via PostgREST (`/rest/v1/`) using the anon key for reads and the admin's session token for writes — there is no backend of ours in between. Schema changes are applied by pasting `supabase-setup.sql` (fresh install) or `supabase-migration-00N-*.sql` (existing install) into its SQL Editor. | It holds no code and knows nothing about the app. RLS restricts `anon` to read-only and `authenticated` (the one admin account, created via the Dashboard — no signup flow in the app) to full read/write. |
 
 **The path of a change:** Claude edits files on the laptop → tests/build run locally → `git commit` + `git push` to GitHub → Netlify auto-builds and publishes → the browser loads the new bundle → the bundle reads/writes Supabase directly. **The path of data:** browser ↔ Supabase only; data never passes through GitHub or Netlify, and never touches the laptop unless the app is open there.
 
@@ -241,17 +241,18 @@ Three tabs: **Stores**, **Workers**, **History**. All edits are staged locally (
 
 - Store cards: name, Shift Mode as two plain buttons (**Default** / **Split Shift Only** — no descriptions), Weekday and Weekend open/close time inputs.
 - Worker cards: name, Main/Float segment (Main only offered if the home store's Main seat is free), **Max workdays/week** (number input, 0.5 steps, clamped 0.5–7), ordered store links with ↑/↓ reordering (a Main's home store is pinned first) and a typeahead that only accepts existing stores.
+- **Recurring days off / Recurring lock** (round 3): a permanent weekly pattern — 7 day-toggle buttons for leave, 7 for a cycling store lock. Stored on the worker (`recurring_leaves`, `recurring_locks`), not per week; see §8.3.
 - **Destructive tiers (§8 of the spec):** deleting a store or worker opens a confirmation modal (styled like the violation box); clearing a single store link applies immediately with a ~5s undo toast.
 
 ### 8.3 New Schedule wizard (3 steps)
 
 1. **Start date.** Any picked date snaps to that week's Monday. If a schedule already exists for that week, a confirm modal warns: *"generating a new one will replace it."*
-2. **Preferences.** Two tabs: leave requests (checkbox grid) and locks (tap a cell → pick one of that worker's linked stores). Leaves and locks on the same cell are mutually exclusive (each entry clears the other). Removing a lock or clearing a leave shows an undo toast.
+2. **Preferences.** Two tabs: leave requests (checkbox grid) and locks (tap a cell → pick one of that worker's linked stores). Leaves and locks on the same cell are mutually exclusive (each entry clears the other). Removing a lock or clearing a leave shows an undo toast. Cells pre-filled from a worker's recurring pattern (§8.2, round 3) show a small badge; overriding one for this week only edits the wizard's per-week state and never touches the worker's permanent pattern — the two are structurally separate all the way down.
 3. **Review & save.** Generates via `generateSchedule` (loading up to 2 prior weeks for streak carry-over and P9), then shows the board. The interactive violation box appears if generation broke P1–P5; after 3 failed attempts it adds a "something has to give" explanation. Regenerate re-rolls; Save opens a bottom sheet (warns about remaining OPEN slots) and persists.
 
 ### 8.4 Review & Modify board (`ScheduleView`)
 
-- **Week/Day layout toggle** (day mode defaults on narrow screens) and **By store / By worker** grouping.
+- **Week/Day layout toggle** (Week + By store is always the default landing view, regardless of screen size) and **By store / By worker** grouping.
 - Store rows show split cells with the real changeover time (e.g. `→3 PM Amir / 3 PM→ Waj`); Split-Only stores are chipped.
 - Worker views show a **Days** column (workload in day-units, red when over allowance) and a live **Hours** column computed from real windows.
 - Tapping a cell opens the **cell editor**: Full-shift tab (one worker all day) or Split tab (1st/2nd shift per worker, changeover time input with "store default" hint and a reset button). Every worker is always listed with a status note (Available / On leave / Locked to X / needs rest / At Y — will swap); assigning over someone swaps them out of that half. Unassigning is an undo-toast action.
@@ -278,6 +279,12 @@ Tapping an **assigned** cell on a saved schedule opens Find Cover instead of the
 ### 8.7 Printing
 
 From the viewer: **Print by worker** (a table per worker) or **Print by store** (a table per store), rendered into a print-only overlay that calls `window.print()` (print CSS hides the app shell).
+
+### 8.8 Admin sign-in (round 3)
+
+When Supabase is configured, the app now gates itself on a session before loading or saving anything: `src/lib/auth.js` wraps `@supabase/auth-js`'s `AuthClient` (not the full `supabase-js` SDK — everything else still goes through the hand-rolled `sb()` PostgREST wrapper in `src/lib/supabase.js`), which owns login, session persistence (localStorage), and automatic token refresh. `App.jsx` subscribes to `onAuthStateChange` once on mount; until a session exists, a plain email/password `LoginForm` renders instead of the app shell — no signup, no password-reset flow, since there's exactly one admin account, created once via the Supabase Dashboard (Authentication → Users → Add user).
+
+Once signed in, `sb()` attaches the admin's access token (`Authorization: Bearer <token>`) to every non-GET request; reads still use the plain anon key. This matches the RLS split (§1, §2): `anon` is SELECT-only, `authenticated` has full CRUD. Local-only mode (no Supabase keys) is unaffected — the login gate only appears when the cloud is configured.
 
 ---
 

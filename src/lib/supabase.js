@@ -1,5 +1,6 @@
 // Thin Supabase client over PostgREST — no SDK dependency.
 // Keys come from Vite env vars (set as Netlify environment variables in production).
+import { getAccessToken } from './auth';
 
 const URL = import.meta.env.VITE_SUPABASE_URL;
 const KEY = import.meta.env.VITE_SUPABASE_ANON_KEY;
@@ -30,6 +31,13 @@ export function diagnostics() {
 async function sb(path, { method = 'GET', body, prefer } = {}) {
   const headers = { apikey: KEY, 'Content-Type': 'application/json', Prefer: prefer || 'return=representation' };
   if (isJwt) headers.Authorization = `Bearer ${KEY}`;
+  // Writes need the signed-in admin's token, not the (now read-only) anon
+  // key — RLS grants full CRUD to the `authenticated` role, SELECT-only to
+  // `anon`. Reads stay on the anon/apikey header above; nothing changes there.
+  if (method !== 'GET') {
+    const token = await getAccessToken();
+    if (token) headers.Authorization = `Bearer ${token}`;
+  }
 
   let res;
   try {

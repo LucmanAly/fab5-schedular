@@ -14,12 +14,14 @@ import {
   DAY_NAMES,
 } from './lib/scheduler';
 import * as cloud from './lib/supabase';
+import { auth } from './lib/auth';
 import { seedStores, seedWorkers } from './lib/seed';
 import CheckGrid from './components/CheckGrid';
 import LockGrid from './components/LockGrid';
 import ScheduleView from './components/ScheduleView';
 import { DiagnosticsPanel, SaveSheet, PrintOverlay, ConfirmModal, UndoToast } from './components/Overlays';
 import SettingsPage from './components/SettingsPanel';
+import LoginForm from './components/LoginForm';
 
 const WIZARD_STEPS = ['Start date', 'Preferences', 'Review & save'];
 
@@ -84,6 +86,12 @@ export default function App() {
   const [settingsPrompt, setSettingsPrompt] = useState(null);
   const [toast, setToast] = useState(null); // Tier-2 undo toast (§8): { message, undo }
 
+  // Admin login (round 3) — only relevant when cloud is configured; local-only
+  // mode never needs a session, so authChecked starts true and session stays
+  // null forever in that mode.
+  const [session, setSession] = useState(null);
+  const [authChecked, setAuthChecked] = useState(!cloud.enabled);
+
   // Wizard state
   const [wStep, setWStep] = useState(0);
   const [wiz, setWiz] = useState(emptyWizard);
@@ -105,12 +113,25 @@ export default function App() {
   const setupReady = stores.length > 0 && workers.length > 0 && workers.length >= stores.length;
   const labels = useMemo(() => dayLabels(wiz.weekStart), [wiz.weekStart]);
 
+  // Tracks the admin's session (sign-in, sign-out, token refresh). Fires once
+  // immediately with the current session (or null) via the INITIAL_SESSION
+  // event, then again on every subsequent auth change.
+  useEffect(() => {
+    if (!cloud.enabled || !auth) return;
+    const { data: sub } = auth.onAuthStateChange((_event, sess) => {
+      setSession(sess);
+      setAuthChecked(true);
+    });
+    return () => sub.subscription.unsubscribe();
+  }, []);
+
   useEffect(() => {
     if (!cloud.enabled) {
       // Local-only: land on the wizard (or settings if the seed is incomplete).
       startNewSchedule();
       return;
     }
+    if (!authChecked || !session) return; // wait for sign-in before loading any data
     (async () => {
       try {
         let [{ stores: st, workers: wk }, weeks] = await Promise.all([cloud.loadSetup(), cloud.listWeeks()]);
@@ -151,7 +172,7 @@ export default function App() {
       }
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [authChecked, session]);
 
   // Settings edits now save on every interaction (blur/click), so saves are
   // serialized through a promise chain — saveSetup is delete-then-reinsert,
@@ -635,7 +656,9 @@ export default function App() {
         </aside>
 
         <main className="main">
-          {loading || route === 'boot' ? (
+          {cloud.enabled && authChecked && !session ? (
+            <LoginForm onSignedIn={setSession} />
+          ) : loading || route === 'boot' ? (
             <div className="panel">
               <p className="hint">Loading your saved setup…</p>
             </div>

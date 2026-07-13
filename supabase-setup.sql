@@ -5,13 +5,14 @@
 -- re-running is NOT required if those tables already exist. Retention count
 -- lives in the app: WEEKS_KEPT in src/lib/supabase.js. Round 3: worker
 -- recurring leave/lock pattern + public-link token columns — see the
--- "Workers" table below.)
+-- "Workers" table below — and read-only anon + admin authentication — see
+-- the RLS policy block below.)
 -- FULL REPLACEMENT: drops and recreates every ShiftBoard table.
 -- Existing schedule data will be lost — this version changes the data model.
 -- Run in the Supabase SQL Editor: New query -> paste -> Run.
--- An EXISTING install that wants round 3's worker columns without losing
--- current schedule data should run supabase-migration-001-recurring-patterns.sql
--- instead of re-running this file.
+-- An EXISTING install that wants round 3's changes without losing current
+-- schedule data should run supabase-migration-001-recurring-patterns.sql and
+-- supabase-migration-002-readonly-anon-auth.sql instead of re-running this file.
 -- ============================================================================
 
 -- Old tables (including the retired config table) are removed entirely.
@@ -138,7 +139,12 @@ create table schedule (
 );
 
 -- ---------------------------------------------------------------------------
--- No-login internal tool: the anon role gets full read/write.
+-- The admin signs in (Supabase Auth, email/password — create the one admin
+-- account via the Dashboard, no signup flow in the app) to read/write
+-- anything. anon (unauthenticated — includes the public per-worker schedule
+-- link, round 3 phase C) gets read-only SELECT; locks are not exposed to
+-- anon since they're an internal scheduling detail, not something a public
+-- link recipient needs.
 -- ---------------------------------------------------------------------------
 alter table stores   enable row level security;
 alter table workers  enable row level security;
@@ -147,12 +153,18 @@ alter table leaves   enable row level security;
 alter table locks    enable row level security;
 alter table schedule enable row level security;
 
-create policy anon_all_stores   on stores   for all to anon using (true) with check (true);
-create policy anon_all_workers  on workers  for all to anon using (true) with check (true);
-create policy anon_all_weeks    on weeks    for all to anon using (true) with check (true);
-create policy anon_all_leaves   on leaves   for all to anon using (true) with check (true);
-create policy anon_all_locks    on locks    for all to anon using (true) with check (true);
-create policy anon_all_schedule on schedule for all to anon using (true) with check (true);
+create policy anon_read_stores   on stores   for select to anon using (true);
+create policy anon_read_workers  on workers  for select to anon using (true);
+create policy anon_read_weeks    on weeks    for select to anon using (true);
+create policy anon_read_leaves   on leaves   for select to anon using (true);
+create policy anon_read_schedule on schedule for select to anon using (true);
+
+create policy auth_all_stores   on stores   for all to authenticated using (true) with check (true);
+create policy auth_all_workers  on workers  for all to authenticated using (true) with check (true);
+create policy auth_all_weeks    on weeks    for all to authenticated using (true) with check (true);
+create policy auth_all_leaves   on leaves   for all to authenticated using (true) with check (true);
+create policy auth_all_locks    on locks    for all to authenticated using (true) with check (true);
+create policy auth_all_schedule on schedule for all to authenticated using (true) with check (true);
 
 -- ===========================================================================
 -- Seed data (§9) — one-time convenience population. Written to be safe to
