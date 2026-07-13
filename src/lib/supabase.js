@@ -7,9 +7,9 @@ const KEY = import.meta.env.VITE_SUPABASE_ANON_KEY;
 
 export const enabled = Boolean(URL && KEY);
 
-// Only the three most recent saved weeks are kept (current + two weeks of
+// Only the eleven most recent saved weeks are kept (current + ten weeks of
 // history); saving a new week automatically evicts the oldest.
-export const WEEKS_KEPT = 3;
+export const WEEKS_KEPT = 11;
 
 // Legacy anon keys are JWTs (start with "eyJ") and go in the Authorization header.
 // New publishable keys (sb_publishable_...) authenticate via the apikey header only.

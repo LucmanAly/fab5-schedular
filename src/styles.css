@@ -159,7 +159,7 @@ input { font-size: 16px; } /* stops iOS zoom-on-focus */
 .field-row { display: flex; flex-direction: column; gap: 16px; }
 .field { display: flex; flex-direction: column; gap: 6px; }
 .field > span { font-weight: 600; }
-.field small { color: var(--muted); font-size: 13px; }
+.field small { display: block; margin-top: 6px; color: var(--muted); font-size: 13px; }
 .field input {
   font: inherit;
   padding: 11px 12px;
@@ -403,13 +403,36 @@ button.cell:not(:disabled):active { filter: brightness(0.92); }
 .btn-light:hover { background: rgba(255, 255, 255, 0.08); border-color: #7c95ac; }
 
 /* ---------- settings page ---------- */
+/* Sticky so Stores/Workers is a one-tap switch from anywhere in a long list —
+   no scrolling back to the top first. Background matches the page (--paper)
+   so cards scrolling underneath don't show through. */
 .settings-tabs {
   display: flex;
+  position: sticky;
+  top: 0;
+  z-index: 3;
+  background: var(--paper);
   border-bottom: 1px solid var(--line);
   margin-bottom: 14px;
   gap: 0;
   overflow-x: auto;
 }
+.settings-back-to-top {
+  position: fixed;
+  bottom: 20px;
+  right: 20px;
+  z-index: 10;
+  width: 44px;
+  height: 44px;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  background: var(--board);
+  color: #fff;
+  font-size: 18px;
+  font-weight: 700;
+  box-shadow: 0 2px 8px rgba(15, 23, 42, 0.25);
+}
+.settings-back-to-top:hover { background: var(--accent); }
 .settings-tab {
   padding: 12px 14px;
   background: none;

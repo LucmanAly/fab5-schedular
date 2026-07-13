@@ -668,7 +668,7 @@ export default function App() {
                 <div className="settings-page">
                   <h1 className="page-title">History</h1>
                   <p className="hint">
-                    The two weeks before the current schedule. Saving a new week drops the oldest.
+                    The 10 weeks before the current schedule. Saving a new week drops the oldest.
                   </p>
                   {olderWeeks.length === 0 ? (
                     <div className="panel">

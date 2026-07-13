@@ -296,7 +296,7 @@ Known limitation: RLS is table-level, not per-token, so the underlying fetch sti
 
 ## 9. History & retention
 
-- **2 distinct calendar weeks** are kept (by `week_start`), enforced by `pruneWeeks()` after every save: anything older than the newest two weeks is deleted across all four week-scoped tables. Re-saving the current week never evicts anything (same primary key).
+- **10 distinct calendar weeks of history** (11 total including the current schedule) are kept (by `week_start`), enforced by `pruneWeeks()` after every save: anything older than the newest 11 weeks is deleted across all four week-scoped tables. Re-saving the current week never evicts anything (same primary key).
 - Each saved week keeps its **leave requests** alongside the schedule — required by Find Cover to distinguish schedule-off from requested-off.
 - All history consumers (streak carry-over, P9) no-op cleanly with 0 or 1 weeks of history.
 

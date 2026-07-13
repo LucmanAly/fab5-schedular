@@ -53,6 +53,20 @@ export default function SettingsPage({ stores, workers, prompt, onSave, onToast 
   const [storeError, setStoreError] = useState(null);
   const [addingWorker, setAddingWorker] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(null); // { kind: 'store'|'worker', id, name }
+  const [showBackToTop, setShowBackToTop] = useState(false);
+
+  // Long Stores/Workers lists otherwise force a manual scroll back to the top
+  // just to switch tabs or reach "+ Add" — the sticky tab bar (CSS) handles
+  // switching tabs; this handles jumping back to the top from anywhere.
+  useEffect(() => {
+    const onScroll = () => setShowBackToTop(window.scrollY > 300);
+    window.addEventListener('scroll', onScroll, { passive: true });
+    return () => window.removeEventListener('scroll', onScroll);
+  }, []);
+
+  function scrollToTop() {
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }
 
   const storeName = (id) => (stores.find((s) => s.id === id) || {}).name || `Store ${id}`;
   const mainOf = (storeId) => workers.find((w) => w.main_store_id === storeId) || null;
@@ -197,7 +211,18 @@ export default function SettingsPage({ stores, workers, prompt, onSave, onToast 
           ['stores', `Stores (${stores.length})`],
           ['workers', `Workers (${workers.length})`],
         ].map(([id, label]) => (
-          <button key={id} type="button" className={`settings-tab ${tab === id ? 'active' : ''}`} onClick={() => setTab(id)}>
+          <button
+            key={id}
+            type="button"
+            className={`settings-tab ${tab === id ? 'active' : ''}`}
+            onClick={() => {
+              setTab(id);
+              // Stores/Workers lists differ in length — without this, switching
+              // tabs deep in a long list can strand the viewport mid-way into
+              // the (possibly shorter) other list instead of showing its top.
+              scrollToTop();
+            }}
+          >
             {label}
           </button>
         ))}
@@ -325,6 +350,12 @@ export default function SettingsPage({ stores, workers, prompt, onSave, onToast 
           }}
           onClose={() => setAddingWorker(false)}
         />
+      )}
+
+      {showBackToTop && (
+        <button type="button" className="settings-back-to-top" aria-label="Back to top" title="Back to top" onClick={scrollToTop}>
+          ↑
+        </button>
       )}
     </div>
   );

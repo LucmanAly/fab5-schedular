@@ -3,10 +3,10 @@
 -- version stack, seed data; v4.2/v4.3: three-week retention + save-batched
 -- versions — comment-only changes, the schema is identical to v4/v4.1 and
 -- re-running is NOT required if those tables already exist. Retention count
--- lives in the app: WEEKS_KEPT in src/lib/supabase.js. Round 3: worker
--- recurring leave/lock pattern + public-link token columns — see the
--- "Workers" table below — and read-only anon + admin authentication — see
--- the RLS policy block below.)
+-- lives in the app: WEEKS_KEPT in src/lib/supabase.js (now 11 — current
+-- schedule + 10 weeks of history). Round 3: worker recurring leave/lock
+-- pattern + public-link token columns — see the "Workers" table below — and
+-- read-only anon + admin authentication — see the RLS policy block below.)
 -- FULL REPLACEMENT: drops and recreates every ShiftBoard table.
 -- Existing schedule data will be lost — this version changes the data model.
 -- Run in the Supabase SQL Editor: New query -> paste -> Run.
@@ -77,8 +77,8 @@ create unique index workers_public_token_uq on workers (public_token)
 
 -- ---------------------------------------------------------------------------
 -- Weeks archive. Identity = calendar week (week_start date is the key). The
--- app keeps only the three most recent distinct weeks (the current schedule
--- plus two weeks of history): saving a new week automatically deletes the
+-- app keeps only the eleven most recent distinct weeks (the current schedule
+-- plus ten weeks of history): saving a new week automatically deletes the
 -- oldest (see pruneWeeks / WEEKS_KEPT in the app — not enforced in SQL).
 -- split_times: { "storeId-dayIndex": "HH:MM" } per-instance changeover
 --   overrides; anything absent uses the derived default (window midpoint).
