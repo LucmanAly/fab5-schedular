@@ -38,8 +38,11 @@ create unique index stores_name_ci on stores (lower(name));
 -- Workers. store_ids is the ORDERED list of linked stores (first = 1st link;
 -- link order drives the tie-breaker ranking after Main preference).
 -- main_store_id marks the worker as Main of that store (their home store,
--- always the first entry of store_ids). At most one Main per store, and a
--- worker can be Main at only one store — both enforced below.
+-- always the first entry of store_ids). A worker can be Main at only one
+-- store (enforced below). A store may have up to 2 Mains — backup for each
+-- other, not a workload split; whichever is available covers, and the
+-- generator's fairness tie-break picks one if both are. That cap of 2 is
+-- enforced in application code only (SettingsPanel.jsx) — see note below.
 -- v4: max_workdays = weekly day allowance (P5); full day = 1, split = 0.5.
 -- ---------------------------------------------------------------------------
 create table workers (
@@ -51,8 +54,12 @@ create table workers (
                 check (max_workdays > 0 and max_workdays <= 7)
 );
 create unique index workers_name_ci on workers (lower(name));
-create unique index workers_one_main_per_store on workers (main_store_id)
-  where main_store_id is not null;
+-- No unique/check index enforces "at most 2 Mains per store" here — a
+-- partial unique index can only express "at most 1" (or unlimited); "at
+-- most N > 1" needs a deferred, statement-level trigger. Not worth the
+-- complexity for a single-tenant, no-login internal tool where the app's
+-- own Settings UI (and the belt-and-braces check in saveSetup()) already
+-- gate this before anything is saved.
 
 -- ---------------------------------------------------------------------------
 -- Weeks archive. Identity = calendar week (week_start date is the key). The

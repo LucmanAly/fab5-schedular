@@ -6,8 +6,8 @@ const KEY = import.meta.env.VITE_SUPABASE_ANON_KEY;
 
 export const enabled = Boolean(URL && KEY);
 
-// Only the two most recent saved weeks are kept; saving a new week
-// automatically evicts the oldest.
+// Only the three most recent saved weeks are kept (Current Schedule + 2 in
+// History); saving a new week automatically evicts the oldest.
 export const WEEKS_KEPT = 3;
 
 // Legacy anon keys are JWTs (start with "eyJ") and go in the Authorization header.
@@ -84,7 +84,20 @@ export async function loadSetup() {
   };
 }
 
+// A store may have at most 2 Mains (backup/redundancy) — the Settings UI
+// already prevents assigning a 3rd, this is just a belt-and-braces check
+// before anything hits the network.
+function assertMainCap(stores, workers) {
+  for (const store of stores) {
+    const mains = workers.filter((w) => w.main_store_id === store.id);
+    if (mains.length > 2) {
+      throw new Error(`${store.name || `Store ${store.id}`} has ${mains.length} Mains — at most 2 are allowed.`);
+    }
+  }
+}
+
 export async function saveSetup(stores, workers) {
+  assertMainCap(stores, workers);
   await sb('workers?id=gte.0', { method: 'DELETE', prefer: 'return=minimal' });
   await sb('stores?id=gte.0', { method: 'DELETE', prefer: 'return=minimal' });
   if (stores.length) {
@@ -117,7 +130,7 @@ export async function saveSetup(stores, workers) {
   }
 }
 
-// ---------- Weeks (the two-week archive) ----------
+// ---------- Weeks (the three-week archive) ----------
 
 export async function listWeeks() {
   return (await sb('weeks?select=week_start,status,saved_at&order=week_start.desc')) || [];

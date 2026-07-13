@@ -654,20 +654,25 @@ export function generateSchedule({
     }
 
     // --- Mains default to their home store on days they can work ---
+    // A store may have up to 2 Mains (backup/redundancy, not a workload
+    // split): whichever is available covers; if both are, the fairness
+    // tie-break in rankFor (fewest days/halves worked) picks one; if neither
+    // is, this store falls through unchanged to the P1 fill loop below.
     for (const store of stores) {
-      const main = workers.find((w) => w.main_store_id === store.id);
-      if (!main) continue;
-      if (lockAt(locks, main.id, d) != null) continue;
-      if (fullLeave(leaves, main.id, d)) continue;
-      if (streak(main, d) >= SOFT_MAX_CONSEC) continue; // rest them if a float can cover
-      if (isSplitOnly(store)) {
-        if (coveredAt(store.id, d, 'am')) continue;
-        if (!canTake(main, d, 'am', store) || !allowanceOK(main, d, 'am')) continue;
-        schedule[main.id][d].am = store.id;
-      } else {
-        if (coveredAt(store.id, d, 'am') && coveredAt(store.id, d, 'pm')) continue;
-        if (!canTake(main, d, 'full', store) || !allowanceOK(main, d, 'full')) continue;
-        schedule[main.id][d] = { am: store.id, pm: store.id };
+      const mode = isSplitOnly(store) ? 'am' : 'full';
+      if (coveredAt(store.id, d, 'am') && (mode === 'am' || coveredAt(store.id, d, 'pm'))) continue;
+
+      const candidates = workers
+        .filter((w) => w.main_store_id === store.id)
+        .filter((main) => lockAt(locks, main.id, d) == null)
+        .filter((main) => !fullLeave(leaves, main.id, d))
+        .filter((main) => streak(main, d) < SOFT_MAX_CONSEC) // rest them if a float can cover
+        .sort(rankFor(store.id, d));
+
+      for (const main of candidates) {
+        if (!canTake(main, d, mode, store) || !allowanceOK(main, d, mode)) continue; // try the other Main
+        place(main, store, d, mode);
+        break;
       }
     }
 

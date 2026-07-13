@@ -526,5 +526,109 @@ function setup(numStores, numFloats) {
   );
 }
 
+// 26. Two Mains per store (backup/redundancy): both available on a day →
+// exactly one covers, not both — the fairness tie-break in rankFor (here,
+// worker id, since both start at 0 days worked) picks the winner.
+{
+  const stores = [{ id: 1, name: 'S' }];
+  const workers = [
+    { id: 1, name: 'M1', store_ids: [1], main_store_id: 1 },
+    { id: 2, name: 'M2', store_ids: [1], main_store_id: 1 },
+  ];
+  const { schedule, violations } = generateSchedule({ stores, workers });
+  const gaps = computeGaps(schedule, stores, workers);
+  const m1Works = worksFull(schedule[1], 0);
+  const m2Works = worksFull(schedule[2], 0);
+  check('2 Mains: store fully covered, no violations', gaps.length === 0 && violations.length === 0);
+  check('2 Mains: exactly one Main covers Monday, not both', m1Works !== m2Works);
+  check('2 Mains: tie-break picks the lower worker id when fully tied', m1Works === true);
+}
+
+// 27. Two Mains: one on full leave → the other covers automatically instead
+// of falling through to the general Float-fill logic.
+{
+  const stores = [{ id: 1, name: 'S' }];
+  const workers = [
+    { id: 1, name: 'M1', store_ids: [1], main_store_id: 1 },
+    { id: 2, name: 'M2', store_ids: [1], main_store_id: 1 },
+  ];
+  const leaves = { 1: [true, false, false, false, false, false, false] };
+  const { schedule, violations } = generateSchedule({ stores, workers, leaves });
+  check(
+    '2 Mains: M1 on leave Monday → M2 covers, M1 does not work',
+    worksFull(schedule[2], 0) && !worksOn(schedule[1], 0) && violations.length === 0
+  );
+}
+
+// 28. Two Mains: one locked to a different store → the other covers this
+// store while the locked one honours their lock elsewhere.
+{
+  const stores = [{ id: 1, name: 'S' }, { id: 2, name: 'T' }];
+  const workers = [
+    { id: 1, name: 'M1', store_ids: [1, 2], main_store_id: 1 },
+    { id: 2, name: 'M2', store_ids: [1, 2], main_store_id: 1 },
+    { id: 3, name: 'M3', store_ids: [2, 1], main_store_id: 2 },
+  ];
+  const locks = { 1: [2, null, null, null, null, null, null] }; // M1 locked to store 2 on Monday
+  const { schedule, violations } = generateSchedule({ stores, workers, locks });
+  check(
+    '2 Mains: M1 locked elsewhere Monday → M2 covers store 1, M1 honours the lock at store 2',
+    worksFull(schedule[2], 0) && schedule[1][0].am === 2 && schedule[1][0].pm === 2
+  );
+  check('lock and Main-default coexist cleanly', violations.length === 0);
+}
+
+// 29. Two Mains: one at the soft consecutive-day ceiling (streak carried
+// over from last week) → the other covers instead.
+{
+  const stores = [{ id: 1, name: 'S' }];
+  const workers = [
+    { id: 1, name: 'M1', store_ids: [1], main_store_id: 1 },
+    { id: 2, name: 'M2', store_ids: [1], main_store_id: 1 },
+  ];
+  const lastWeekLoad = { 1: [0, 0, 0, 0, 2, 2, 2], 2: [0, 0, 0, 0, 0, 0, 0] };
+  const { schedule, violations } = generateSchedule({ stores, workers, lastWeekLoad });
+  check(
+    '2 Mains: M1 at the soft streak ceiling on Monday → M2 covers instead',
+    worksFull(schedule[2], 0) && !worksOn(schedule[1], 0) && violations.length === 0
+  );
+}
+
+// 30. Two Mains: neither available (both on leave) → falls through
+// unchanged to a linked Float via the normal P1 fill loop.
+{
+  const stores = [{ id: 1, name: 'S' }];
+  const workers = [
+    { id: 1, name: 'M1', store_ids: [1], main_store_id: 1 },
+    { id: 2, name: 'M2', store_ids: [1], main_store_id: 1 },
+    { id: 3, name: 'F1', store_ids: [1], main_store_id: null },
+  ];
+  const leaves = {
+    1: [true, false, false, false, false, false, false],
+    2: [true, false, false, false, false, false, false],
+  };
+  const { schedule, violations } = generateSchedule({ stores, workers, leaves });
+  const gaps = computeGaps(schedule, stores, workers);
+  check(
+    '2 Mains: both on leave → a Float covers via normal P1 fill, no gap, no violation',
+    worksFull(schedule[3], 0) && gaps.length === 0 && violations.length === 0
+  );
+}
+
+// 31. The cap of 2 Mains is UI-only, not generator-enforced — with 3
+// "Mains" at one store the generator still resolves to exactly one covering
+// per day (documents that SettingsPanel.jsx is where the real cap lives).
+{
+  const stores = [{ id: 1, name: 'S' }];
+  const workers = [
+    { id: 1, name: 'M1', store_ids: [1], main_store_id: 1 },
+    { id: 2, name: 'M2', store_ids: [1], main_store_id: 1 },
+    { id: 3, name: 'M3', store_ids: [1], main_store_id: 1 },
+  ];
+  const { schedule, violations } = generateSchedule({ stores, workers });
+  const workingCount = [1, 2, 3].filter((id) => worksFull(schedule[id], 0)).length;
+  check('generator has no hard Main-count limit; exactly one covers regardless of N', workingCount === 1 && violations.length === 0);
+}
+
 console.log(failed ? `\n${failed} test(s) failed` : '\nAll tests passed');
 process.exit(failed ? 1 : 0);

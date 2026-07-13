@@ -13,6 +13,9 @@ import { ConfirmModal } from './Overlays';
 
 const norm = (s) => (s || '').trim().toLowerCase();
 
+// A store may have up to 2 Mains — backup/redundancy, not a workload split.
+const MAX_MAINS_PER_STORE = 2;
+
 const STORE_DEFAULTS = {
   shift_mode: 'default',
   weekday_open: '08:00',
@@ -85,7 +88,7 @@ export default function SettingsPage({ stores, workers, prompt, onSave, onToast 
   workersRef.current = workersState;
 
   const storeName = (id) => (storesState.find((s) => s.id === id) || {}).name || `Store ${id}`;
-  const mainOf = (storeId) => workersState.find((w) => w.main_store_id === storeId) || null;
+  const mainsOf = (storeId) => workersState.filter((w) => w.main_store_id === storeId);
 
   const problems = useMemo(() => {
     const list = [];
@@ -219,8 +222,8 @@ export default function SettingsPage({ stores, workers, prompt, onSave, onToast 
     }
     const home = (worker.store_ids || [])[0];
     if (home == null) return;
-    const taken = mainOf(home);
-    if (taken && taken.id !== worker.id) return; // UI disables this, belt and braces
+    const others = mainsOf(home).filter((w) => w.id !== worker.id);
+    if (others.length >= MAX_MAINS_PER_STORE) return; // UI disables this, belt and braces
     commitWorkerPatch(worker.id, { main_store_id: home });
   }
 
@@ -286,7 +289,7 @@ export default function SettingsPage({ stores, workers, prompt, onSave, onToast 
                 key={s.id}
                 store={s}
                 workers={workersState}
-                mainOf={mainOf}
+                mainsOf={mainsOf}
                 onRenameCommit={(name) => renameStore(s.id, name)}
                 onPatch={(patch) => commitStorePatch(s.id, patch)}
                 onDelete={() => setConfirmDelete({ kind: 'store', id: s.id, name: s.name })}
@@ -302,7 +305,8 @@ export default function SettingsPage({ stores, workers, prompt, onSave, onToast 
           <h3 className="settings-section-title">Step 2 — Workers</h3>
           <p className="settings-hint">
             Link each worker to the stores they can work at. The first store is their favourite — a float’s priority
-            drops with every store further down the list. Each store can have one Main worker.
+            drops with every store further down the list. Each store can have up to 2 Mains — backup for each other,
+            not a split shift; whichever is available covers.
           </p>
 
           {storesState.length === 0 ? (
@@ -320,7 +324,7 @@ export default function SettingsPage({ stores, workers, prompt, onSave, onToast 
                     worker={w}
                     stores={storesState}
                     storeName={storeName}
-                    mainOf={mainOf}
+                    mainsOf={mainsOf}
                     onRenameCommit={(name) => renameWorker(w.id, name)}
                     onAllowanceCommit={(raw) => {
                       const v = Number(raw);
@@ -373,7 +377,7 @@ export default function SettingsPage({ stores, workers, prompt, onSave, onToast 
         <AddWorkerSheet
           stores={storesState}
           workers={workersState}
-          mainOf={mainOf}
+          mainsOf={mainsOf}
           onCreate={(payload) => {
             if (createWorker(payload)) setAddingWorker(false);
           }}
@@ -384,8 +388,8 @@ export default function SettingsPage({ stores, workers, prompt, onSave, onToast 
   );
 }
 
-function StoreCard({ store, workers, mainOf, onRenameCommit, onPatch, onDelete }) {
-  const main = mainOf(store.id);
+function StoreCard({ store, workers, mainsOf, onRenameCommit, onPatch, onDelete }) {
+  const mains = mainsOf(store.id);
   const nameField = useBlurCommit(store.name, onRenameCommit);
   const weekdayOpen = useBlurCommit(store.weekday_open || '08:00', (v) => {
     if (!v) return { ok: false };
@@ -413,7 +417,9 @@ function StoreCard({ store, workers, mainOf, onRenameCommit, onPatch, onDelete }
     <div className="settings-worker-card store-card-settings">
       <div className="worker-header">
         <input type="text" className="worker-name" value={nameField.value} onChange={nameField.onChange} onBlur={nameField.onBlur} />
-        <span className="store-row-main">{main ? `Main: ${main.name}` : 'No main worker yet'}</span>
+        <span className="store-row-main">
+          {mains.length ? `Main: ${mains.map((m) => m.name).join(', ')}` : 'No main worker yet'}
+        </span>
         <button type="button" className="worker-delete" title="Delete store" onClick={onDelete}>
           ✕
         </button>
@@ -473,11 +479,11 @@ function StoreCard({ store, workers, mainOf, onRenameCommit, onPatch, onDelete }
   );
 }
 
-function WorkerCard({ worker, stores, storeName, mainOf, onRenameCommit, onAllowanceCommit, onDelete, onLink, onUnlink, onMove, onRole }) {
+function WorkerCard({ worker, stores, storeName, mainsOf, onRenameCommit, onAllowanceCommit, onDelete, onLink, onUnlink, onMove, onRole }) {
   const ids = worker.store_ids || [];
   const home = ids[0];
-  const homeMain = home != null ? mainOf(home) : null;
-  const mainBlocked = home == null || (homeMain && homeMain.id !== worker.id);
+  const otherMains = home != null ? mainsOf(home).filter((m) => m.id !== worker.id) : [];
+  const mainBlocked = home == null || otherMains.length >= MAX_MAINS_PER_STORE;
   const nameField = useBlurCommit(worker.name, onRenameCommit);
   const allowanceField = useBlurCommit(worker.max_workdays != null ? String(worker.max_workdays) : '5', onAllowanceCommit);
 
@@ -522,7 +528,13 @@ function WorkerCard({ worker, stores, storeName, mainOf, onRenameCommit, onAllow
             type="button"
             className={worker.main_store_id != null ? 'active' : ''}
             disabled={mainBlocked}
-            title={mainBlocked && homeMain ? `${storeName(home)} already has a Main: ${homeMain.name}` : undefined}
+            title={
+              mainBlocked && otherMains.length
+                ? `${storeName(home)} already has ${otherMains.length === 1 ? 'a Main' : 'its 2 Mains'}: ${otherMains
+                    .map((m) => m.name)
+                    .join(', ')}`
+                : undefined
+            }
             onClick={() => onRole('main')}
           >
             Main at {home != null ? storeName(home) : '—'}
@@ -567,13 +579,14 @@ function WorkerCard({ worker, stores, storeName, mainOf, onRenameCommit, onAllow
   );
 }
 
-function AddWorkerSheet({ stores, workers, mainOf, onCreate, onClose }) {
+function AddWorkerSheet({ stores, workers, mainsOf, onCreate, onClose }) {
   const [name, setName] = useState('');
   const [storeIds, setStoreIds] = useState([]);
   const [role, setRole] = useState(null); // asked on first link: 'main' | 'float'
 
   const home = storeIds[0];
-  const homeMain = home != null ? mainOf(home) : null;
+  const homeMains = home != null ? mainsOf(home) : [];
+  const mainFull = homeMains.length >= MAX_MAINS_PER_STORE;
   const nameTaken = workers.some((w) => norm(w.name) === norm(name));
   const canCreate = name.trim() && !nameTaken && storeIds.length > 0 && role != null;
 
@@ -640,18 +653,28 @@ function AddWorkerSheet({ stores, workers, mainOf, onCreate, onClose }) {
               <button
                 type="button"
                 className={role === 'main' ? 'active' : ''}
-                disabled={!!homeMain}
-                title={homeMain ? `${storeName(home)} already has a Main: ${homeMain.name}` : undefined}
+                disabled={mainFull}
+                title={
+                  mainFull
+                    ? `${storeName(home)} already has its 2 Mains: ${homeMains.map((m) => m.name).join(', ')}`
+                    : undefined
+                }
                 onClick={() => setRole('main')}
               >
-                Main{homeMain ? ` (taken: ${homeMain.name})` : ''}
+                Main
+                {mainFull
+                  ? ` (full: ${homeMains.map((m) => m.name).join(', ')})`
+                  : homeMains.length
+                    ? ` (1 of 2 taken: ${homeMains[0].name})`
+                    : ''}
               </button>
               <button type="button" className={role === 'float' ? 'active' : ''} onClick={() => setRole('float')}>
                 Float
               </button>
             </div>
             <small>
-              Main = the store’s default worker (one per store). Float = rotates between their linked stores.
+              Main = the store’s default worker (up to 2, as backup for each other). Float = rotates between their
+              linked stores.
             </small>
           </div>
         )}

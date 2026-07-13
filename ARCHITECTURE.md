@@ -132,7 +132,10 @@ schedule[workerId][dayIdx] = { am: storeId|null, pm: storeId|null }
 Invariants enforced by the Settings UI and DB indexes:
 
 - Store and worker names are unique **case-insensitively**.
-- At most one Main per store; a worker is Main of at most one store.
+- Up to 2 Mains per store (backup/redundancy, not a workload split —
+  whichever is available covers; the fairness tie-break picks one if both
+  are), enforced in application code only; a worker is Main of at most one
+  store.
 - A Main's home store is always their first link.
 - Total workers ≥ total stores before a schedule can be generated.
 
@@ -212,7 +215,7 @@ Input: `{ stores, workers, leaves, locks, lastWeekLoad, history, splitTimes }` �
 For each day Mon→Sun, three phases:
 
 1. **Locks (P4).** Placed first, unconditionally. On a Split-Only store the locked worker gets the first half only (P2 outranks the lock's full-day *shape*; the lock — "works that store that day" — still holds, and the lock check passes on ≥ 1 half).
-2. **Main defaults.** Each store's Main takes their home store (full day, or first half on Split-Only stores) unless they're locked elsewhere, on leave, at the soft streak limit, out of allowance, or the store is already covered.
+2. **Main defaults.** Each store's Main(s) — up to 2, as backup for each other — take their home store (full day, or first half on Split-Only stores) unless they're locked elsewhere, on leave, at the soft streak limit, out of allowance, or the store is already covered. If both a store's Mains are available on a day, the fairness tie-break (fewest days/halves worked) picks one; if neither is, the store falls through to the general fill loop below.
 3. **Fill (P1).** For every uncovered half: on default-mode stores, try one worker for the whole day first (P8); otherwise fill halves individually. Candidates must pass `canTake` (slot empty, no real-time overlap, not the same worker both halves of a Split-Only store) and are tried in relaxation tiers:
    - linked + streak < 3 + within allowance
    - linked + streak < 4 (P7 relaxed to the hard ceiling)
@@ -240,7 +243,7 @@ For each day Mon→Sun, three phases:
 Three tabs: **Stores**, **Workers**, **History**. All edits are staged locally (`tempStores` / `tempWorkers`) and only persisted on "Save setup", which validates (names present/unique, every worker linked) and then does a full delete-and-reinsert via `saveSetup`.
 
 - Store cards: name, Shift Mode as two plain buttons (**Default** / **Split Shift Only** — no descriptions), Weekday and Weekend open/close time inputs.
-- Worker cards: name, Main/Float segment (Main only offered if the home store's Main seat is free), **Max workdays/week** (number input, 0.5 steps, clamped 0.5–7), ordered store links with ↑/↓ reordering (a Main's home store is pinned first) and a typeahead that only accepts existing stores.
+- Worker cards: name, Main/Float segment (Main only offered if the home store has fewer than 2 Mains), **Max workdays/week** (number input, 0.5 steps, clamped 0.5–7), ordered store links with ↑/↓ reordering (a Main's home store is pinned first) and a typeahead that only accepts existing stores.
 - **Destructive tiers (§8 of the spec):** deleting a store or worker opens a confirmation modal (styled like the violation box); clearing a single store link applies immediately with a ~5s undo toast.
 
 ### 8.3 New Schedule wizard (3 steps)
