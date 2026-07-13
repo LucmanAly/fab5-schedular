@@ -1141,3 +1141,15 @@ export function dayLabels(weekStartISO) {
 export function formatWeek(weekStartISO) {
   return fromISODate(weekStartISO).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
 }
+// "Week 20–26 Jul 2026" (or "Week 28 Jun – 4 Jul 2026" across a month boundary) — used on
+// printed sheets, where a date range reads more official than a single "week of" anchor date.
+export function formatWeekRange(weekStartISO) {
+  const start = fromISODate(weekStartISO);
+  const end = fromISODate(addDays(weekStartISO, 6));
+  const startMonth = start.toLocaleDateString('en-US', { month: 'short' });
+  const endMonth = end.toLocaleDateString('en-US', { month: 'short' });
+  const sameMonth = startMonth === endMonth && start.getFullYear() === end.getFullYear();
+  return sameMonth
+    ? `Week ${start.getDate()}–${end.getDate()} ${endMonth} ${end.getFullYear()}`
+    : `Week ${start.getDate()} ${startMonth} – ${end.getDate()} ${endMonth} ${end.getFullYear()}`;
+}

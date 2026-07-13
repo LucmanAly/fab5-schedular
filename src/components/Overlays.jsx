@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { DAY_NAMES, workerAtHalf, formatWeek, shiftTimeCompact } from '../lib/scheduler';
+import { DAY_NAMES, workerAtHalf, formatWeek, formatWeekRange, shiftTimeCompact } from '../lib/scheduler';
 
 /**
  * Tier 1 destructive confirmation (§8) — for rare, hard-to-reverse deletes
@@ -148,16 +148,43 @@ export function DiagnosticsPanel({ status, diag, lastError, onTest, onClose }) {
   );
 }
 
-function daySummaryByWorker(schedule, stores, storeName, wId, d, leaves, splitTimes) {
+// Structured (not string) so the printed cell can lay out name/time on their own
+// lines instead of one elongated line, and so a lone half-day shift renders plainly
+// instead of as a fake "— / Shop 3pm–10pm" split.
+function workerDayCell(schedule, stores, storeName, wId, d, leaves, splitTimes) {
   const s = (schedule[wId] && schedule[wId][d]) || { am: null, pm: null };
   const byId = (id) => stores.find((st) => st.id === id);
-  if (s.am == null && s.pm == null) return leaves[wId] && leaves[wId][d] ? 'LEAVE' : '—';
-  if (s.am != null && s.am === s.pm) {
-    return `${storeName(s.am)} ${shiftTimeCompact(byId(s.am), d, 'full', splitTimes)}`;
+  if (s.am == null && s.pm == null) {
+    return { kind: leaves[wId] && leaves[wId][d] ? 'leave' : 'off' };
   }
-  const a = s.am != null ? `${storeName(s.am)} ${shiftTimeCompact(byId(s.am), d, 'am', splitTimes)}` : '—';
-  const p = s.pm != null ? `${storeName(s.pm)} ${shiftTimeCompact(byId(s.pm), d, 'pm', splitTimes)}` : '—';
-  return `${a} / ${p}`;
+  if (s.am != null && s.am === s.pm) {
+    return { kind: 'full', shifts: [{ name: storeName(s.am), time: shiftTimeCompact(byId(s.am), d, 'full', splitTimes) }] };
+  }
+  const shifts = [];
+  if (s.am != null) shifts.push({ half: 'AM', name: storeName(s.am), time: shiftTimeCompact(byId(s.am), d, 'am', splitTimes) });
+  if (s.pm != null) shifts.push({ half: 'PM', name: storeName(s.pm), time: shiftTimeCompact(byId(s.pm), d, 'pm', splitTimes) });
+  return { kind: shifts.length > 1 ? 'split' : 'shift', shifts };
+}
+
+function WorkerCell({ cell }) {
+  if (cell.kind === 'off' || cell.kind === 'leave') {
+    return (
+      <td className="cell-off">
+        <span className="off-tag">{cell.kind === 'leave' ? 'LEAVE' : 'OFF'}</span>
+      </td>
+    );
+  }
+  return (
+    <td className={cell.kind === 'split' ? 'cell-split' : undefined}>
+      {cell.shifts.map((sh, i) => (
+        <div className="shift-entry" key={sh.half || i}>
+          {cell.kind === 'split' && <span className="shift-half">{sh.half}</span>}
+          <span className="shift-store">{sh.name}</span>
+          <span className="shift-time">{sh.time}</span>
+        </div>
+      ))}
+    </td>
+  );
 }
 
 function daySummaryByStore(schedule, workers, store, d, splitTimes) {
@@ -173,6 +200,8 @@ function daySummaryByStore(schedule, workers, store, d, splitTimes) {
 export function PrintOverlay({ mode, weekStart, stores, workers, schedule, leaves, labels, splitTimes = {}, onClose }) {
   const storeName = (id) => (stores.find((s) => s.id === id) || {}).name || `Store ${id}`;
   const title = `Week of ${formatWeek(weekStart)}`;
+  const weekRange = formatWeekRange(weekStart);
+  const printedOn = new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
   // 'all' (default) or a single worker/store id — the collective print stays
   // the default; one person's/store's sheet is a toolbar pick away.
   const [only, setOnly] = useState('all');
@@ -209,14 +238,28 @@ export function PrintOverlay({ mode, weekStart, stores, workers, schedule, leave
       </div>
 
       <div className="print-sheet">
-        {mode === 'worker' ? (
-          <>
-            <h1>
-              {only === 'all' ? 'Staff schedule' : `${shownWorkers[0] ? shownWorkers[0].name : ''} — schedule`} — {title}
-            </h1>
-            {shownWorkers.map((w) => (
+        <header className="print-letterhead">
+          <div className="print-brand">ShiftBoard</div>
+          <h1 className="print-doc-title">
+            {mode === 'worker'
+              ? only === 'all'
+                ? 'Staff Schedule'
+                : 'Employee Schedule'
+              : only === 'all'
+                ? 'Store Coverage Schedule'
+                : 'Store Coverage'}
+          </h1>
+          <div className="print-doc-meta">
+            <span>{weekRange}</span>
+            <span className="print-doc-meta-dot" aria-hidden="true">•</span>
+            <span>Printed {printedOn}</span>
+          </div>
+        </header>
+
+        {mode === 'worker'
+          ? shownWorkers.map((w) => (
               <section key={w.id} className="print-block">
-                <h2>{w.name}</h2>
+                <h2 className="print-block-name">{w.name}</h2>
                 <table>
                   <thead>
                     <tr>{labels.map((l) => <th key={l}>{l}</th>)}</tr>
@@ -224,22 +267,16 @@ export function PrintOverlay({ mode, weekStart, stores, workers, schedule, leave
                   <tbody>
                     <tr>
                       {DAY_NAMES.map((_, d) => (
-                        <td key={d}>{daySummaryByWorker(schedule, stores, storeName, w.id, d, leaves, splitTimes)}</td>
+                        <WorkerCell key={d} cell={workerDayCell(schedule, stores, storeName, w.id, d, leaves, splitTimes)} />
                       ))}
                     </tr>
                   </tbody>
                 </table>
               </section>
-            ))}
-          </>
-        ) : (
-          <>
-            <h1>
-              {only === 'all' ? 'Store coverage' : `${shownStores[0] ? shownStores[0].name : ''} — coverage`} — {title}
-            </h1>
-            {shownStores.map((s) => (
+            ))
+          : shownStores.map((s) => (
               <section key={s.id} className="print-block">
-                <h2>{s.name}</h2>
+                <h2 className="print-block-name">{s.name}</h2>
                 <table>
                   <thead>
                     <tr>{labels.map((l) => <th key={l}>{l}</th>)}</tr>
@@ -254,8 +291,8 @@ export function PrintOverlay({ mode, weekStart, stores, workers, schedule, leave
                 </table>
               </section>
             ))}
-          </>
-        )}
+
+        <footer className="print-footer">Generated by ShiftBoard</footer>
       </div>
     </div>
   );
