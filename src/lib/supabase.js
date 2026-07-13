@@ -80,6 +80,9 @@ export async function loadSetup() {
       store_ids: w.store_ids || [],
       main_store_id: w.main_store_id ?? null,
       max_workdays: w.max_workdays != null ? Number(w.max_workdays) : 5,
+      recurring_leaves: w.recurring_leaves || [false, false, false, false, false, false, false],
+      recurring_locks: w.recurring_locks || [null, null, null, null, null, null, null],
+      public_token: w.public_token || null,
     })),
   };
 }
@@ -112,6 +115,9 @@ export async function saveSetup(stores, workers) {
         store_ids: w.store_ids || [],
         main_store_id: w.main_store_id ?? null,
         max_workdays: w.max_workdays != null ? w.max_workdays : 5,
+        recurring_leaves: w.recurring_leaves || [false, false, false, false, false, false, false],
+        recurring_locks: w.recurring_locks || [null, null, null, null, null, null, null],
+        public_token: w.public_token || null,
       })),
     });
   }

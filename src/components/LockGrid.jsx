@@ -10,7 +10,7 @@ import { lockAt, rangeCompact, storeWindow, toMin, fmtMin, minToHHMM } from '../
 // Range rule: the schedule day has exactly one changeover point, so a range
 // must start at the store's opening or end at its closing time (a prefix or
 // suffix of the day) — validated here rather than left for the generator.
-export default function LockGrid({ workers, stores, labels, locks, onSet }) {
+export default function LockGrid({ workers, stores, labels, locks, onSet, recurringLocks = {} }) {
   const [target, setTarget] = useState(null); // { worker, dayIdx }
 
   const storeName = (id) => (stores.find((s) => s.id === id) || {}).name || `Store ${id}`;
@@ -45,13 +45,22 @@ export default function LockGrid({ workers, stores, labels, locks, onSet }) {
                 </td>
                 {labels.map((_, d) => {
                   const locked = lockAt(locks, w.id, d);
+                  const cell = locks[w.id] && locks[w.id][d];
+                  const pattern = recurringLocks[w.id] && recurringLocks[w.id][d];
+                  const fromPattern = cell != null && pattern != null && JSON.stringify(cell) === JSON.stringify(pattern);
                   return (
                     <td key={d}>
                       <button
                         type="button"
-                        className={`checkcell lockcell ${locked ? 'on' : ''}`}
-                        aria-label={`Lock for ${w.name}, ${labels[d]}`}
-                        title={locked ? `Locked to ${storeName(locked.storeId)}` : 'Add lock'}
+                        className={`checkcell lockcell ${locked ? 'on' : ''} ${fromPattern ? 'checkcell-recurring' : ''}`}
+                        aria-label={`Lock for ${w.name}, ${labels[d]}${fromPattern ? ' (recurring)' : ''}`}
+                        title={
+                          fromPattern
+                            ? `From this worker’s recurring pattern — tap to override for this week only`
+                            : locked
+                              ? `Locked to ${storeName(locked.storeId)}`
+                              : 'Add lock'
+                        }
                         onClick={() => setTarget({ worker: w, dayIdx: d })}
                       >
                         {cellText(w.id, d)}

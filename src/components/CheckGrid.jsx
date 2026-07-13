@@ -5,7 +5,7 @@ import { leaveAt, rangeCompact, toMin, fmtMin } from '../lib/scheduler';
 // default case). An active cell grows a small ⏱ affordance to optionally
 // limit the leave to a time range — e.g. "unavailable 2pm–10pm" — instead of
 // the whole day. Cell values: false | true | { start:'HH:MM', end:'HH:MM' }.
-export default function CheckGrid({ workers, labels, value, onChange, tone }) {
+export default function CheckGrid({ workers, labels, value, onChange, tone, recurringLeaves = {} }) {
   const [editing, setEditing] = useState(null); // { worker, dayIdx }
 
   function setCell(workerId, dayIdx, v) {
@@ -49,13 +49,16 @@ export default function CheckGrid({ workers, labels, value, onChange, tone }) {
               </td>
               {labels.map((_, d) => {
                 const on = value[w.id] && value[w.id][d];
+                const pattern = recurringLeaves[w.id] && recurringLeaves[w.id][d];
+                const fromPattern = !!on && !!pattern && JSON.stringify(on) === JSON.stringify(pattern);
                 return (
                   <td key={d} className="range-td">
                     <button
                       type="button"
-                      className={`checkcell ${on ? 'on' : ''} ${on && on !== true ? 'checkcell-range' : ''}`}
+                      className={`checkcell ${on ? 'on' : ''} ${on && on !== true ? 'checkcell-range' : ''} ${fromPattern ? 'checkcell-recurring' : ''}`}
                       aria-pressed={!!on}
-                      aria-label={`${w.name}, ${labels[d]}`}
+                      aria-label={`${w.name}, ${labels[d]}${fromPattern ? ' (recurring)' : ''}`}
+                      title={fromPattern ? 'From this worker’s recurring pattern — tap to override for this week only' : undefined}
                       onClick={() => toggle(w.id, d)}
                     >
                       {cellLabel(w, d)}

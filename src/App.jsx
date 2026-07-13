@@ -34,6 +34,25 @@ const emptyWizard = () => ({
   v0: null, // snapshot of the freshly generated schedule (version stack §6.3)
 });
 
+// A new week starts from each worker's permanent recurring pattern (Settings),
+// copied once into that week's leaves/locks. From here on it's plain per-week
+// state like anything typed into the wizard by hand — editing it for this one
+// week never writes back to the worker's recurring_leaves/recurring_locks, so
+// a weekly override can never touch the permanent pattern.
+// worker-id-keyed lookup of a recurring_* field, for the wizard grids' visual marker.
+const recurringByWorker = (workers, field) => Object.fromEntries(workers.map((w) => [w.id, w[field] || []]));
+
+const recurringWizard = (workers) => {
+  const base = emptyWizard();
+  const leaves = {};
+  const locks = {};
+  for (const w of workers) {
+    if (w.recurring_leaves && w.recurring_leaves.some((d) => d)) leaves[w.id] = [...w.recurring_leaves];
+    if (w.recurring_locks && w.recurring_locks.some((d) => d != null)) locks[w.id] = [...w.recurring_locks];
+  }
+  return { ...base, leaves, locks };
+};
+
 const versionEntry = (schedule, splitTimes, leaves) => ({
   schedule,
   splitTimes,
@@ -112,7 +131,7 @@ export default function App() {
           const ok = await openWeek(weeks[0].week_start, weeks);
           if (!ok) setRoute('settings');
         } else if (st.length > 0 && wk.length >= st.length) {
-          setWiz(emptyWizard());
+          setWiz(recurringWizard(wk));
           setWStep(0);
           setRoute('wizard');
         } else {
@@ -189,7 +208,7 @@ export default function App() {
       go('settings');
       return;
     }
-    setWiz(emptyWizard());
+    setWiz(recurringWizard(workers));
     setWStep(0);
     setPrefTab('leave');
     setGenViolations([]);
@@ -848,7 +867,14 @@ export default function App() {
                       </div>
 
                       {prefTab === 'leave' ? (
-                        <CheckGrid workers={workers} labels={labels} value={wiz.leaves} onChange={setLeaves} tone="leave" />
+                        <CheckGrid
+                          workers={workers}
+                          labels={labels}
+                          value={wiz.leaves}
+                          onChange={setLeaves}
+                          tone="leave"
+                          recurringLeaves={recurringByWorker(workers, 'recurring_leaves')}
+                        />
                       ) : (
                         <LockGrid
                           workers={workers}
@@ -856,6 +882,7 @@ export default function App() {
                           labels={labels}
                           locks={wiz.locks}
                           onSet={setLock}
+                          recurringLocks={recurringByWorker(workers, 'recurring_locks')}
                         />
                       )}
 

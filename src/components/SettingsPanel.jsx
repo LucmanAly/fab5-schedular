@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { ConfirmModal } from './Overlays';
+import { DAY_NAMES } from '../lib/scheduler';
 
 // Settings is a full page reached from the sidebar.
 // Setup order: 1) add stores, 2) add workers and link them to stores.
@@ -163,7 +164,16 @@ export default function SettingsPage({ stores, workers, prompt, onSave, onToast 
     const id = Math.max(0, ...workers.map((w) => w.id)) + 1;
     onSave(stores, [
       ...workers,
-      { id, name: name.trim(), store_ids: storeIds, main_store_id: role === 'main' ? storeIds[0] : null, max_workdays: 5 },
+      {
+        id,
+        name: name.trim(),
+        store_ids: storeIds,
+        main_store_id: role === 'main' ? storeIds[0] : null,
+        max_workdays: 5,
+        recurring_leaves: [false, false, false, false, false, false, false],
+        recurring_locks: [null, null, null, null, null, null, null],
+        public_token: crypto.randomUUID(),
+      },
     ]);
     return true;
   }
@@ -264,6 +274,8 @@ export default function SettingsPage({ stores, workers, prompt, onSave, onToast 
                     onUnlink={(sid) => unlinkStore(w, sid)}
                     onMove={(sid, dir) => moveLink(w, sid, dir)}
                     onRole={(role) => setRole(w, role)}
+                    onRecurringLeave={(days) => patchWorker(w.id, { recurring_leaves: days })}
+                    onRecurringLock={(days) => patchWorker(w.id, { recurring_locks: days })}
                     stores={stores}
                   />
                 ))}
@@ -406,11 +418,43 @@ function StoreCard({ store: s, stores, workers, mainOf, onPatch, onDelete }) {
   );
 }
 
-function WorkerCard({ worker, workers, stores, storeName, mainOf, onRename, onAllowance, onDelete, onLink, onUnlink, onMove, onRole }) {
+function WorkerCard({
+  worker,
+  workers,
+  stores,
+  storeName,
+  mainOf,
+  onRename,
+  onAllowance,
+  onDelete,
+  onLink,
+  onUnlink,
+  onMove,
+  onRole,
+  onRecurringLeave,
+  onRecurringLock,
+}) {
   const ids = worker.store_ids || [];
   const home = ids[0];
   const homeMain = home != null ? mainOf(home) : null;
   const mainBlocked = home == null || (homeMain && homeMain.id !== worker.id);
+  const recLeave = worker.recurring_leaves || [false, false, false, false, false, false, false];
+  const recLock = worker.recurring_locks || [null, null, null, null, null, null, null];
+
+  function toggleRecurringLeave(i) {
+    const next = [...recLeave];
+    next[i] = !next[i];
+    onRecurringLeave(next);
+  }
+  // Cycles a day through: no lock -> each linked store in link order -> no lock.
+  function cycleRecurringLock(i) {
+    if (!ids.length) return;
+    const cur = recLock[i];
+    const idx = cur == null ? -1 : ids.indexOf(cur);
+    const next = [...recLock];
+    next[i] = idx + 1 >= ids.length ? null : ids[idx + 1];
+    onRecurringLock(next);
+  }
 
   return (
     <div className="settings-worker-card">
@@ -444,6 +488,51 @@ function WorkerCard({ worker, workers, stores, storeName, mainOf, onRename, onAl
           validate={(v) => v !== '' && Number.isFinite(Number(v))}
           onCommit={(v) => onAllowance(Math.max(0.5, Math.min(7, Math.round(Number(v) * 2) / 2)))}
         />
+      </div>
+
+      <div className="store-settings-row recurring-row">
+        <span className="store-settings-label" title="A permanent default — pre-fills the wizard's leave grid, but any week can still override it just for that week.">
+          Recurring days off
+        </span>
+        <div className="recurring-days recurring-leaves">
+          {DAY_NAMES.map((d, i) => (
+            <button
+              key={d}
+              type="button"
+              className={`day-toggle ${recLeave[i] ? 'on' : ''}`}
+              title={recLeave[i] ? `Always off ${d} — tap to clear` : `Tap to mark always off ${d}`}
+              onClick={() => toggleRecurringLeave(i)}
+            >
+              {d[0]}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      <div className="store-settings-row recurring-row">
+        <span className="store-settings-label" title="A permanent default — pre-fills the wizard's lock grid, but any week can still override it just for that week.">
+          Recurring lock
+        </span>
+        <div className="recurring-days recurring-locks">
+          {DAY_NAMES.map((d, i) => (
+            <button
+              key={d}
+              type="button"
+              className={`day-toggle ${recLock[i] != null ? 'on' : ''}`}
+              disabled={!ids.length}
+              title={
+                !ids.length
+                  ? 'Link a store first'
+                  : recLock[i] != null
+                    ? `Always locked to ${storeName(recLock[i])} on ${d} — tap to cycle`
+                    : `Tap to lock ${d} to a store`
+              }
+              onClick={() => cycleRecurringLock(i)}
+            >
+              {recLock[i] != null ? storeName(recLock[i]).slice(0, 2) : d[0]}
+            </button>
+          ))}
+        </div>
       </div>
 
       {ids.length > 0 && (

@@ -3,10 +3,15 @@
 -- version stack, seed data; v4.2/v4.3: three-week retention + save-batched
 -- versions — comment-only changes, the schema is identical to v4/v4.1 and
 -- re-running is NOT required if those tables already exist. Retention count
--- lives in the app: WEEKS_KEPT in src/lib/supabase.js.)
+-- lives in the app: WEEKS_KEPT in src/lib/supabase.js. Round 3: worker
+-- recurring leave/lock pattern + public-link token columns — see the
+-- "Workers" table below.)
 -- FULL REPLACEMENT: drops and recreates every ShiftBoard table.
 -- Existing schedule data will be lost — this version changes the data model.
 -- Run in the Supabase SQL Editor: New query -> paste -> Run.
+-- An EXISTING install that wants round 3's worker columns without losing
+-- current schedule data should run supabase-migration-001-recurring-patterns.sql
+-- instead of re-running this file.
 -- ============================================================================
 
 -- Old tables (including the retired config table) are removed entirely.
@@ -44,18 +49,30 @@ create unique index stores_name_ci on stores (lower(name));
 -- always the first entry of store_ids). At most one Main per store, and a
 -- worker can be Main at only one store — both enforced below.
 -- v4: max_workdays = weekly day allowance (P5); full day = 1, split = 0.5.
+-- Round 3: recurring_leaves/recurring_locks are a permanent default for the
+-- per-week leave/lock grid — same 7-element (Mon-Sun) value shapes as the
+-- per-week cells (see leaveAt/lockAt in src/lib/scheduler.js). The wizard
+-- copies these into that week's leaves/locks once, at wizard-start; a
+-- one-off override for a single week never writes back here.
+-- public_token is a permanent random token for the read-only "?view=TOKEN"
+-- per-worker schedule link.
 -- ---------------------------------------------------------------------------
 create table workers (
-  id            int primary key,
-  name          text not null,
-  store_ids     int[] not null default '{}'::int[],
-  main_store_id int,
-  max_workdays  numeric(3,1) not null default 5
-                check (max_workdays > 0 and max_workdays <= 7)
+  id               int primary key,
+  name             text not null,
+  store_ids        int[] not null default '{}'::int[],
+  main_store_id    int,
+  max_workdays     numeric(3,1) not null default 5
+                   check (max_workdays > 0 and max_workdays <= 7),
+  recurring_leaves jsonb not null default '[false,false,false,false,false,false,false]'::jsonb,
+  recurring_locks  jsonb not null default '[null,null,null,null,null,null,null]'::jsonb,
+  public_token     text default gen_random_uuid()::text
 );
 create unique index workers_name_ci on workers (lower(name));
 create unique index workers_one_main_per_store on workers (main_store_id)
   where main_store_id is not null;
+create unique index workers_public_token_uq on workers (public_token)
+  where public_token is not null;
 
 -- ---------------------------------------------------------------------------
 -- Weeks archive. Identity = calendar week (week_start date is the key). The

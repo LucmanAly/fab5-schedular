@@ -51,5 +51,8 @@ export function seedWorkers() {
     store_ids,
     main_store_id,
     max_workdays: 5,
+    recurring_leaves: [false, false, false, false, false, false, false],
+    recurring_locks: [null, null, null, null, null, null, null],
+    public_token: crypto.randomUUID(),
   }));
 }
