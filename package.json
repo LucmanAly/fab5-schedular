@@ -7,14 +7,18 @@
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",
-    "test": "node tests/scheduler.test.js"
+    "test": "node tests/scheduler.test.js",
+    "prepare": "husky"
   },
   "dependencies": {
+    "@supabase/auth-js": "^2.110.3",
     "react": "^18.3.1",
     "react-dom": "^18.3.1"
   },
   "devDependencies": {
     "@vitejs/plugin-react": "^4.3.4",
+    "husky": "^9.1.7",
+    "playwright": "^1.61.1",
     "vite": "^5.4.11"
   }
 }
