@@ -4,6 +4,11 @@ dist
 .env.local
 .DS_Store
 
+# Claude Code worktree-isolation scratch dirs — ephemeral, session-local git
+# worktrees. One got committed as a stray submodule reference (no matching
+# .gitmodules entry) and broke Netlify's checkout; never track this path.
+.claude/worktrees/
+
 # Graphify: cache + HTML viz are large/regenerable; GRAPH_REPORT.md and
 # graph.json ARE versioned so any session can read the graph's findings.
 graphify-out/cache/
