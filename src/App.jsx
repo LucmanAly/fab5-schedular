@@ -28,8 +28,8 @@ export default function App() {
   const [step, setStep] = useState(0);
   const [cfg, setCfg] = useState({ numStores: 8, numFloats: 6, maxConsec: 3, weekStart: nextMonday() });
   const [splitTimes, setSplitTimes] = useState({}); // { "storeId-dayIdx": "14:00" }
-  const [stores, setStores] = useState([]);
-  const [workers, setWorkers] = useState([]);
+  const [stores, setStores] = useState(() => resizeSetup(cfg.numStores, cfg.numFloats, [], []).stores);
+  const [workers, setWorkers] = useState(() => resizeSetup(cfg.numStores, cfg.numFloats, [], []).workers);
   const [lastWeek, setLastWeek] = useState({});
   const [lastWeekSource, setLastWeekSource] = useState(null);
   const [leaves, setLeaves] = useState({});
